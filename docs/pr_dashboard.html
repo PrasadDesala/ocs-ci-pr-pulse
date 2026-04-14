@@ -1,0 +1,1119 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OCS-CI PR Pulse</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header .subtitle {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        
+        .header .last-updated {
+            margin-top: 15px;
+            opacity: 0.8;
+            font-size: 0.9em;
+        }
+        
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 30px;
+            background: #f8f9fa;
+        }
+        
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            text-align: center;
+            transition: all 0.2s;
+            cursor: pointer;
+            position: relative;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .card.active {
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3);
+            transform: scale(1.05);
+        }
+        
+        .card::after {
+            content: 'Click to filter';
+            position: absolute;
+            bottom: 5px;
+            left: 0;
+            right: 0;
+            font-size: 0.7em;
+            color: #9ca3af;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        
+        .card:hover::after {
+            opacity: 1;
+        }
+        
+        .card-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .card-label {
+            color: #666;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .card.total { border-top: 4px solid #667eea; }
+        .card.total .card-value { color: #667eea; }
+        
+        .card.reviewer { border-top: 4px solid #f59e0b; }
+        .card.reviewer .card-value { color: #f59e0b; }
+        
+        .card.author { border-top: 4px solid #3b82f6; }
+        .card.author .card-value { color: #3b82f6; }
+        
+        .card.approved { border-top: 4px solid #10b981; }
+        .card.approved .card-value { color: #10b981; }
+        
+        .card.stale { border-top: 4px solid #ef4444; }
+        .card.stale .card-value { color: #ef4444; }
+        
+        .card.draft { border-top: 4px solid #9ca3af; }
+        .card.draft .card-value { color: #9ca3af; }
+        
+        .card.age { border-top: 4px solid #8b5cf6; }
+        .card.age .card-value { color: #8b5cf6; }
+        
+        .tabs {
+            display: flex;
+            background: #f8f9fa;
+            padding: 0 30px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        
+        .tab {
+            padding: 15px 25px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 1em;
+            font-weight: 500;
+            color: #666;
+            transition: all 0.3s;
+            border-bottom: 3px solid transparent;
+        }
+        
+        .tab:hover {
+            color: #667eea;
+        }
+        
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+        
+        .tab-content {
+            display: none;
+            padding: 30px;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .squad-section {
+            margin-bottom: 30px;
+        }
+        
+        .squad-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px 8px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .squad-name {
+            font-size: 1.3em;
+            font-weight: bold;
+            text-transform: capitalize;
+        }
+        
+        .squad-count {
+            background: rgba(255,255,255,0.2);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+        }
+        
+        .pr-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-radius: 0 0 8px 8px;
+            overflow: hidden;
+        }
+        
+        .pr-table th {
+            background: #f8f9fa;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #374151;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        
+        .pr-table td {
+            padding: 12px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        
+        .pr-table tr:hover {
+            background: #f9fafb;
+        }
+        
+        .pr-link {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .pr-link:hover {
+            text-decoration: underline;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 500;
+            cursor: help;
+        }
+        
+        .badge[title] {
+            position: relative;
+        }
+        
+        .badge.waiting-reviewer {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        
+        .badge.waiting-author {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        
+        .badge.approved {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .badge.stale {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        
+        .badge.draft {
+            background: #f3f4f6;
+            color: #6b7280;
+            border: 1px dashed #9ca3af;
+        }
+        
+        .badge.size-xs { background: #e0e7ff; color: #3730a3; }
+        .badge.size-s { background: #dbeafe; color: #1e40af; }
+        .badge.size-m { background: #fef3c7; color: #92400e; }
+        .badge.size-l { background: #fed7aa; color: #9a3412; }
+        .badge.size-xl { background: #fee2e2; color: #991b1b; }
+        
+        .age-indicator {
+            font-weight: 500;
+        }
+        
+        .age-fresh { color: #10b981; }
+        .age-normal { color: #f59e0b; }
+        .age-old { color: #ef4444; }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #9ca3af;
+        }
+        
+        .empty-state svg {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+        
+        .filters {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .filter-group label {
+            font-weight: 500;
+            color: #374151;
+        }
+        
+        .filter-group select,
+        .filter-group input {
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 0.9em;
+        }
+        
+        /* Autocomplete styles */
+        .autocomplete-wrapper {
+            position: relative;
+        }
+        
+        .autocomplete-suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #d1d5db;
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+            z-index: 1000;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .autocomplete-suggestions.show {
+            display: block;
+        }
+        
+        .autocomplete-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        
+        .autocomplete-item:hover {
+            background: #f3f4f6;
+        }
+        
+        .autocomplete-item:last-child {
+            border-bottom: none;
+        }
+        
+        @media (max-width: 768px) {
+            .summary-cards {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .pr-table {
+                font-size: 0.9em;
+            }
+            
+            .pr-table th,
+            .pr-table td {
+                padding: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 OCS-CI PR Pulse</h1>
+            <div class="subtitle">Real-time Pull Request Status Tracking</div>
+            <div class="last-updated">Last Updated: 2026-04-14 19:22 UTC</div>
+        </div>
+        
+        <div class="summary-cards">
+            <div class="card total" onclick="filterByCard('all')" title="Total number of open pull requests">
+                <div class="card-label">Total Open PRs</div>
+                <div class="card-value"></div>
+            </div>
+            <div class="card reviewer" onclick="filterByCard('waiting_reviewer')" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
+                <div class="card-label">Needs Review</div>
+                <div class="card-value">8</div>
+            </div>
+            <div class="card author" onclick="filterByCard('waiting_author')" title="Needs Changes 🔴 - Reviewer requested changes OR left review comments (inline or body). Author hasn't pushed commits since review. Action: Author should address feedback">
+                <div class="card-label">Needs Changes</div>
+                <div class="card-value">3</div>
+            </div>
+            <div class="card approved" onclick="filterByCard('approved')" title="Approved 🟢 - PR has been approved by one or more reviewers. Ready to merge. Action: Merge when ready">
+                <div class="card-label">Approved</div>
+                <div class="card-value">4</div>
+            </div>
+            <div class="card stale" onclick="filterByCard('stale')" title="PRs with no activity for more than 7 days">
+                <div class="card-label">Stale (>7 days)</div>
+                <div class="card-value">3</div>
+            </div>
+            <div class="card draft" onclick="filterByCard('draft')" title="Draft or work-in-progress pull requests">
+                <div class="card-label">Draft / WIP</div>
+                <div class="card-value">2</div>
+            </div>
+            <div class="card age" title="Average age of all open PRs in days">
+                <div class="card-label">Avg PR Age (days)</div>
+                <div class="card-value"></div>
+            </div>
+        </div>
+        
+        <!-- Filters -->
+        <div class="filters">
+            <div class="filter-group">
+                <label>🔍 Search:</label>
+                <input type="text" id="searchInput" placeholder="Search PRs, authors..." onkeyup="filterPRs()">
+            </div>
+            <div class="filter-group">
+                <label>Squad:</label>
+                <select id="squadFilter" onchange="filterPRs()">
+                    <option value="">All Squads</option>
+                    
+                    <option value="Team Alpha">Team Alpha</option>
+                    
+                    <option value="Team Beta">Team Beta</option>
+                    
+                    <option value="Unassigned">Unassigned</option>
+                    
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Status:</label>
+                <select id="statusFilter" onchange="filterPRs()">
+                    <option value="">All Status</option>
+                    <option value="waiting_reviewer">Needs Review</option>
+                    <option value="waiting_author">Needs Changes</option>
+                    <option value="approved">Approved</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Size:</label>
+                <select id="sizeFilter" onchange="filterPRs()">
+                    <option value="">All Sizes</option>
+                    <option value="XS">XS</option>
+                    <option value="S">S</option>
+                    <option value="M">M</option>
+                    <option value="L">L</option>
+                    <option value="XL">XL</option>
+                </select>
+            </div>
+            <div class="filter-group autocomplete-wrapper">
+                <label>Label:</label>
+                <input type="text" id="labelFilter" placeholder="Type to search labels..." autocomplete="off" oninput="filterLabels()">
+                <div id="labelSuggestions" class="autocomplete-suggestions"></div>
+            </div>
+            <div class="filter-group">
+                <button onclick="resetFilters()" style="padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9em;">
+                    Clear Filters
+                </button>
+            </div>
+        </div>
+        
+        <!-- Single Unified PR Table -->
+        <div style="padding: 30px;">
+            <div class="squad-section">
+                <div class="squad-header">
+                    <span class="squad-name" id="tableTitle">All Open Pull Requests</span>
+                    <span class="squad-count" id="visibleCount"> PRs</span>
+                </div>
+                <table class="pr-table" id="prTable">
+                    <thead>
+                        <tr>
+                            <th onclick="sortTable(0)" style="cursor: pointer;">PR #</th>
+                            <th onclick="sortTable(1)" style="cursor: pointer;">Title</th>
+                            <th onclick="sortTable(2)" style="cursor: pointer;">Author</th>
+                            <th onclick="sortTable(3)" style="cursor: pointer;">Squad</th>
+                            <th onclick="sortTable(4)" style="cursor: pointer;">Status</th>
+                            <th onclick="sortTable(5)" style="cursor: pointer;">Age</th>
+                            <th onclick="sortTable(6)" style="cursor: pointer;">Size</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        
+                            
+                            <tr data-status="waiting_reviewer" data-squad="Team Beta" data-size="XL" data-stale="false" data-draft="false" data-author="developer5" data-labels="enhancement,needs-review">
+                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/14904" class="pr-link" target="_blank">#14904</a></td>
+                                <td>
+                                    Add new feature for component 5
+                                    
+                                    
+                                </td>
+                                <td>developer5</td>
+                                <td>Team Beta</td>
+                                <td>
+                                    <span class="badge waiting-reviewer" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
+                                        NEEDS REVIEW
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="age-indicator age-normal">
+                                        6d
+                                    </span>
+                                </td>
+                                <td><span class="badge size-xl">XL</span></td>
+                            </tr>
+                            
+                            <tr data-status="waiting_reviewer" data-squad="Team Alpha" data-size="L" data-stale="false" data-draft="false" data-author="developer4" data-labels="enhancement,needs-review">
+                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/14903" class="pr-link" target="_blank">#14903</a></td>
+                                <td>
+                                    Add new feature for component 4
+                                    
+                                    
+                                </td>
+                                <td>developer4</td>
+                                <td>Team Alpha</td>
+                                <td>
+                                    <span class="badge waiting-reviewer" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
+                                        NEEDS REVIEW
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="age-indicator age-normal">
+                                        5d
+                                    </span>
+                                </td>
+                                <td><span class="badge size-l">L</span></td>
+                            </tr>
+                            
+                            <tr data-status="waiting_reviewer" data-squad="Team Gamma" data-size="M" data-stale="false" data-draft="false" data-author="developer3" data-labels="enhancement,needs-review">
+                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/14902" class="pr-link" target="_blank">#14902</a></td>
+                                <td>
+                                    Add new feature for component 3
+                                    
+                                    
+                                </td>
+                                <td>developer3</td>
+                                <td>Team Gamma</td>
+                                <td>
+                                    <span class="badge waiting-reviewer" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
+                                        NEEDS REVIEW
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="age-indicator age-normal">
+                                        4d
+                                    </span>
+                                </td>
+                                <td><span class="badge size-m">M</span></td>
+                            </tr>
+                            
+                            <tr data-status="waiting_reviewer" data-squad="Team Beta" data-size="S" data-stale="false" data-draft="false" data-author="developer2" data-labels="enhancement,needs-review">
+                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/14901" class="pr-link" target="_blank">#14901</a></td>
+                                <td>
+                                    Add new feature for component 2
+                                    
+                                    
+                                </td>
+                                <td>developer2</td>
+                                <td>Team Beta</td>
+                                <td>
+                                    <span class="badge waiting-reviewer" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
+                                        NEEDS REVIEW
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="age-indicator age-normal">
+                                        3d
+                                    </span>
+                                </td>
+                                <td><span class="badge size-s">S</span></td>
+                            </tr>
+                            
+                            <tr data-status="waiting_reviewer" data-squad="Team Alpha" data-size="XS" data-stale="false" data-draft="false" data-author="developer1" data-labels="enhancement,needs-review">
+                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/14900" class="pr-link" target="_blank">#14900</a></td>
+                                <td>
+                                    Add new feature for component 1
+                                    
+                                    
+                                </td>
+                                <td>developer1</td>
+                                <td>Team Alpha</td>
+                                <td>
+                                    <span class="badge waiting-reviewer" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
+                                        NEEDS REVIEW
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="age-indicator age-fresh">
+                                        2d
+                                    </span>
+                                </td>
+                                <td><span class="badge size-xs">XS</span></td>
+                            </tr>
+                            
+                        
+                            
+                            <tr data-status="waiting_author" data-squad="Team Gamma" data-size="L" data-stale="false" data-draft="false" data-author="contributor3" data-labels="bug,changes-requested">
+                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/14852" class="pr-link" target="_blank">#14852</a></td>
+                                <td>
+                                    Fix bug in module 3
+                                    
+                                    
+                                </td>
+                                <td>contributor3</td>
+                                <td>Team Gamma</td>
+                                <td>
+                                    <span class="badge waiting-author" title="Needs Changes 🔴 - Reviewer requested changes OR left review comments (inline or body). Author hasn't pushed commits since review. Action: Author should address feedback">
+                                        NEEDS CHANGES
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="age-indicator age-old">
+                                        7d
+                                    </span>
+                                </td>
+                                <td><span class="badge size-l">L</span></td>
+                            </tr>
+                            
+                            <tr data-status="waiting_author" data-squad="Team Beta" data-size="M" data-stale="false" data-draft="false" data-author="contributor2" data-labels="bug,changes-requested">
+                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/14851" class="pr-link" target="_blank">#14851</a></td>
+                                <td>
+                                    Fix bug in module 2
+                                    
+                                    
+                                </td>
+                                <td>contributor2</td>
+                                <td>Team Beta</td>
+                                <td>
+                                    <span class="badge waiting-author" title="Needs Changes 🔴 - Reviewer requested changes OR left review comments (inline or body). Author hasn't pushed commits since review. Action: Author should address feedback">
+                                        NEEDS CHANGES
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="age-indicator age-normal">
+                                        6d
+                                    </span>
+                                </td>
+                                <td><span class="badge size-m">M</span></td>
+                            </tr>
+                            
+                            <tr data-status="waiting_author" data-squad="Team Alpha" data-size="S" data-stale="false" data-draft="false" data-author="contributor1" data-labels="bug,changes-requested">
+                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/14850" class="pr-link" target="_blank">#14850</a></td>
+                                <td>
+                                    Fix bug in module 1
+                                    
+                                    
+                                </td>
+                                <td>contributor1</td>
+                                <td>Team Alpha</td>
+                                <td>
+                                    <span class="badge waiting-author" title="Needs Changes 🔴 - Reviewer requested changes OR left review comments (inline or body). Author hasn't pushed commits since review. Action: Author should address feedback">
+                                        NEEDS CHANGES
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="age-indicator age-normal">
+                                        5d
+                                    </span>
+                                </td>
+                                <td><span class="badge size-s">S</span></td>
+                            </tr>
+                            
+                            <tr data-status="approved" data-squad="Team Beta" data-size="XS" data-stale="false" data-draft="false" data-author="docs-team2" data-labels="documentation,approved">
+                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/14801" class="pr-link" target="_blank">#14801</a></td>
+                                <td>
+                                    Update documentation for 2
+                                    
+                                    
+                                </td>
+                                <td>docs-team2</td>
+                                <td>Team Beta</td>
+                                <td>
+                                    <span class="badge approved" title="Approved 🟢 - PR has been approved by one or more reviewers. Ready to merge. Action: Merge when ready">
+                                        APPROVED
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="age-indicator age-normal">
+                                        4d
+                                    </span>
+                                </td>
+                                <td><span class="badge size-xs">XS</span></td>
+                            </tr>
+                            
+                            <tr data-status="approved" data-squad="Team Alpha" data-size="XS" data-stale="false" data-draft="false" data-author="docs-team1" data-labels="documentation,approved">
+                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/14800" class="pr-link" target="_blank">#14800</a></td>
+                                <td>
+                                    Update documentation for 1
+                                    
+                                    
+                                </td>
+                                <td>docs-team1</td>
+                                <td>Team Alpha</td>
+                                <td>
+                                    <span class="badge approved" title="Approved 🟢 - PR has been approved by one or more reviewers. Ready to merge. Action: Merge when ready">
+                                        APPROVED
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="age-indicator age-normal">
+                                        3d
+                                    </span>
+                                </td>
+                                <td><span class="badge size-xs">XS</span></td>
+                            </tr>
+                            
+                        
+                            
+                            <tr data-status="waiting_reviewer" data-squad="Unassigned" data-size="L" data-stale="true" data-draft="false" data-author="olddev3" data-labels="refactoring,stale">
+                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/14702" class="pr-link" target="_blank">#14702</a></td>
+                                <td>
+                                    Old PR: Refactor legacy code 3
+                                    
+                                    <span class="badge stale">STALE</span>
+                                </td>
+                                <td>olddev3</td>
+                                <td>Unassigned</td>
+                                <td>
+                                    <span class="badge waiting-reviewer" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
+                                        NEEDS REVIEW
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="age-indicator age-old">
+                                        47d
+                                    </span>
+                                </td>
+                                <td><span class="badge size-l">L</span></td>
+                            </tr>
+                            
+                            <tr data-status="waiting_reviewer" data-squad="Unassigned" data-size="L" data-stale="true" data-draft="false" data-author="olddev2" data-labels="refactoring,stale">
+                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/14701" class="pr-link" target="_blank">#14701</a></td>
+                                <td>
+                                    Old PR: Refactor legacy code 2
+                                    
+                                    <span class="badge stale">STALE</span>
+                                </td>
+                                <td>olddev2</td>
+                                <td>Unassigned</td>
+                                <td>
+                                    <span class="badge waiting-reviewer" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
+                                        NEEDS REVIEW
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="age-indicator age-old">
+                                        46d
+                                    </span>
+                                </td>
+                                <td><span class="badge size-l">L</span></td>
+                            </tr>
+                            
+                            <tr data-status="waiting_reviewer" data-squad="Unassigned" data-size="L" data-stale="true" data-draft="false" data-author="olddev1" data-labels="refactoring,stale">
+                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/14700" class="pr-link" target="_blank">#14700</a></td>
+                                <td>
+                                    Old PR: Refactor legacy code 1
+                                    
+                                    <span class="badge stale">STALE</span>
+                                </td>
+                                <td>olddev1</td>
+                                <td>Unassigned</td>
+                                <td>
+                                    <span class="badge waiting-reviewer" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
+                                        NEEDS REVIEW
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="age-indicator age-old">
+                                        45d
+                                    </span>
+                                </td>
+                                <td><span class="badge size-l">L</span></td>
+                            </tr>
+                            
+                            <tr data-status="draft" data-squad="Team Beta" data-size="M" data-stale="false" data-draft="true" data-author="researcher2" data-labels="WIP,experimental">
+                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/14601" class="pr-link" target="_blank">#14601</a></td>
+                                <td>
+                                    WIP: New experimental feature 2
+                                    <span class="badge draft">DRAFT</span>
+                                    
+                                </td>
+                                <td>researcher2</td>
+                                <td>Team Beta</td>
+                                <td>
+                                    <span class="badge draft" title="">
+                                        DRAFT
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="age-indicator age-old">
+                                        8d
+                                    </span>
+                                </td>
+                                <td><span class="badge size-m">M</span></td>
+                            </tr>
+                            
+                            <tr data-status="draft" data-squad="Team Alpha" data-size="M" data-stale="false" data-draft="true" data-author="researcher1" data-labels="WIP,experimental">
+                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/14600" class="pr-link" target="_blank">#14600</a></td>
+                                <td>
+                                    WIP: New experimental feature 1
+                                    <span class="badge draft">DRAFT</span>
+                                    
+                                </td>
+                                <td>researcher1</td>
+                                <td>Team Alpha</td>
+                                <td>
+                                    <span class="badge draft" title="">
+                                        DRAFT
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="age-indicator age-old">
+                                        7d
+                                    </span>
+                                </td>
+                                <td><span class="badge size-m">M</span></td>
+                            </tr>
+                            
+                            <tr data-status="approved" data-squad="Team Alpha" data-size="XS" data-stale="false" data-draft="false" data-author="docs-team4" data-labels="documentation,approved">
+                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/14803" class="pr-link" target="_blank">#14803</a></td>
+                                <td>
+                                    Update documentation for 4
+                                    
+                                    
+                                </td>
+                                <td>docs-team4</td>
+                                <td>Team Alpha</td>
+                                <td>
+                                    <span class="badge approved" title="Approved 🟢 - PR has been approved by one or more reviewers. Ready to merge. Action: Merge when ready">
+                                        APPROVED
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="age-indicator age-normal">
+                                        6d
+                                    </span>
+                                </td>
+                                <td><span class="badge size-xs">XS</span></td>
+                            </tr>
+                            
+                            <tr data-status="approved" data-squad="Team Gamma" data-size="XS" data-stale="false" data-draft="false" data-author="docs-team3" data-labels="documentation,approved">
+                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/14802" class="pr-link" target="_blank">#14802</a></td>
+                                <td>
+                                    Update documentation for 3
+                                    
+                                    
+                                </td>
+                                <td>docs-team3</td>
+                                <td>Team Gamma</td>
+                                <td>
+                                    <span class="badge approved" title="Approved 🟢 - PR has been approved by one or more reviewers. Ready to merge. Action: Merge when ready">
+                                        APPROVED
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="age-indicator age-normal">
+                                        5d
+                                    </span>
+                                </td>
+                                <td><span class="badge size-xs">XS</span></td>
+                            </tr>
+                            
+                        
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Filter PRs based on current filter values
+        function filterPRs() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const squadFilter = document.getElementById('squadFilter').value.toLowerCase();
+            const statusFilter = document.getElementById('statusFilter').value;
+            const sizeFilter = document.getElementById('sizeFilter').value;
+            const labelFilter = document.getElementById('labelFilter').value.toLowerCase().trim();
+            
+            let visibleCount = 0;
+            const rows = document.querySelectorAll('#prTable tbody tr');
+            
+            rows.forEach(row => {
+                const prNumber = row.cells[0].textContent.toLowerCase().replace('#', '');
+                const prTitle = row.cells[1].textContent.toLowerCase();
+                const prAuthor = row.cells[2].textContent.toLowerCase();
+                const prSquad = row.dataset.squad.toLowerCase();
+                const prStatus = row.dataset.status;
+                const prSize = row.dataset.size;
+                const isStale = row.dataset.stale === 'true';
+                const isDraft = row.dataset.draft === 'true';
+                const prLabels = row.dataset.labels ? row.dataset.labels.toLowerCase() : '';
+                
+                let show = true;
+                
+                // Search filter (searches in PR#, title, and author)
+                // Remove # from search term for PR number matching
+                if (searchTerm) {
+                    const cleanSearchTerm = searchTerm.replace('#', '');
+                    if (!prNumber.includes(cleanSearchTerm) &&
+                        !prTitle.includes(searchTerm) &&
+                        !prAuthor.includes(searchTerm)) {
+                        show = false;
+                    }
+                }
+                
+                // Squad filter
+                if (squadFilter && prSquad !== squadFilter) {
+                    show = false;
+                }
+                
+                // Status filter
+                if (statusFilter && prStatus !== statusFilter) {
+                    show = false;
+                }
+                
+                // Size filter
+                if (sizeFilter && prSize !== sizeFilter) {
+                    show = false;
+                }
+                
+                // Label filter - check if any label matches
+                if (labelFilter && !prLabels.includes(labelFilter)) {
+                    show = false;
+                }
+                
+                row.style.display = show ? '' : 'none';
+                if (show) visibleCount++;
+            });
+            
+            // Update visible count
+            document.getElementById('visibleCount').textContent = visibleCount + ' PRs';
+        }
+        
+        // Filter by clicking summary cards
+        function filterByCard(filterType) {
+            // Remove active class from all cards
+            document.querySelectorAll('.card').forEach(card => {
+                card.classList.remove('active');
+            });
+            
+            // Reset all filters first
+            document.getElementById('searchInput').value = '';
+            document.getElementById('squadFilter').value = '';
+            document.getElementById('statusFilter').value = '';
+            document.getElementById('sizeFilter').value = '';
+            
+            // Apply filter based on card clicked
+            if (filterType === 'all') {
+                document.querySelector('.card.total').classList.add('active');
+                document.getElementById('tableTitle').textContent = 'All Open Pull Requests';
+            } else if (filterType === 'stale') {
+                document.querySelector('.card.stale').classList.add('active');
+                document.getElementById('tableTitle').textContent = 'Stale PRs (>7 days)';
+                // Show only stale PRs
+                const rows = document.querySelectorAll('#prTable tbody tr');
+                let visibleCount = 0;
+                rows.forEach(row => {
+                    const isStale = row.dataset.stale === 'true';
+                    row.style.display = isStale ? '' : 'none';
+                    if (isStale) visibleCount++;
+                });
+                document.getElementById('visibleCount').textContent = visibleCount + ' PRs';
+                return;
+            } else if (filterType === 'draft') {
+                document.querySelector('.card.draft').classList.add('active');
+                document.getElementById('tableTitle').textContent = 'Draft / WIP PRs';
+                // Show only draft PRs
+                const rows = document.querySelectorAll('#prTable tbody tr');
+                let visibleCount = 0;
+                rows.forEach(row => {
+                    const isDraft = row.dataset.draft === 'true';
+                    row.style.display = isDraft ? '' : 'none';
+                    if (isDraft) visibleCount++;
+                });
+                document.getElementById('visibleCount').textContent = visibleCount + ' PRs';
+                return;
+            } else {
+                // Status filters
+                const cardMap = {
+                    'waiting_reviewer': { card: '.card.reviewer', title: 'Needs Review' },
+                    'waiting_author': { card: '.card.author', title: 'Needs Changes' },
+                    'approved': { card: '.card.approved', title: 'Approved PRs' }
+                };
+                
+                if (cardMap[filterType]) {
+                    document.querySelector(cardMap[filterType].card).classList.add('active');
+                    document.getElementById('tableTitle').textContent = cardMap[filterType].title;
+                    document.getElementById('statusFilter').value = filterType;
+                }
+            }
+            
+            filterPRs();
+        }
+        
+        // Reset all filters
+        function resetFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('squadFilter').value = '';
+            document.getElementById('statusFilter').value = '';
+            document.getElementById('sizeFilter').value = '';
+            document.getElementById('labelFilter').value = '';
+            document.getElementById('labelSuggestions').classList.remove('show');
+            
+            // Remove active class from all cards
+            document.querySelectorAll('.card').forEach(card => {
+                card.classList.remove('active');
+            });
+            document.querySelector('.card.total').classList.add('active');
+            
+            document.getElementById('tableTitle').textContent = 'All Open Pull Requests';
+            filterPRs();
+        }
+        
+        // Label autocomplete functionality
+        const allLabels = ["WIP", "approved", "bug", "changes-requested", "documentation", "enhancement", "experimental", "needs-review", "refactoring", "stale"];
+        
+        function filterLabels() {
+            const input = document.getElementById('labelFilter');
+            const suggestions = document.getElementById('labelSuggestions');
+            const searchTerm = input.value.toLowerCase().trim();
+            
+            if (!searchTerm) {
+                suggestions.classList.remove('show');
+                suggestions.innerHTML = '';
+                filterPRs();
+                return;
+            }
+            
+            const matches = allLabels.filter(label =>
+                label.toLowerCase().includes(searchTerm)
+            );
+            
+            if (matches.length === 0) {
+                suggestions.classList.remove('show');
+                suggestions.innerHTML = '';
+                filterPRs();
+                return;
+            }
+            
+            suggestions.innerHTML = matches.map(label =>
+                `<div class="autocomplete-item" onclick="selectLabel('${label}')">${label}</div>`
+            ).join('');
+            suggestions.classList.add('show');
+            
+            // Filter PRs as user types
+            filterPRs();
+        }
+        
+        function selectLabel(label) {
+            document.getElementById('labelFilter').value = label;
+            document.getElementById('labelSuggestions').classList.remove('show');
+            filterPRs();
+        }
+        
+        // Close suggestions when clicking outside
+        document.addEventListener('click', function(e) {
+            const labelFilter = document.getElementById('labelFilter');
+            const suggestions = document.getElementById('labelSuggestions');
+            if (e.target !== labelFilter && !suggestions.contains(e.target)) {
+                suggestions.classList.remove('show');
+            }
+        });
+        
+        // Sort table by column
+        let sortDirection = {};
+        function sortTable(columnIndex) {
+            const table = document.getElementById('prTable');
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            
+            // Toggle sort direction
+            sortDirection[columnIndex] = !sortDirection[columnIndex];
+            const ascending = sortDirection[columnIndex];
+            
+            rows.sort((a, b) => {
+                let aVal = a.cells[columnIndex].textContent.trim();
+                let bVal = b.cells[columnIndex].textContent.trim();
+                
+                // Handle numeric values (PR#, Age)
+                if (columnIndex === 0) {
+                    aVal = parseInt(aVal.replace('#', ''));
+                    bVal = parseInt(bVal.replace('#', ''));
+                } else if (columnIndex === 5) {
+                    aVal = parseInt(aVal.replace('d', ''));
+                    bVal = parseInt(bVal.replace('d', ''));
+                }
+                
+                if (aVal < bVal) return ascending ? -1 : 1;
+                if (aVal > bVal) return ascending ? 1 : -1;
+                return 0;
+            });
+            
+            // Re-append sorted rows
+            rows.forEach(row => tbody.appendChild(row));
+        }
+        
+        // Initialize - show all PRs
+        window.onload = function() {
+            filterByCard('all');
+        };
+        
+        // Auto-refresh every 5 minutes
+        setTimeout(() => {
+            location.reload();
+        }, 5 * 60 * 1000);
+    </script>
+</body>
+</html>
+    
