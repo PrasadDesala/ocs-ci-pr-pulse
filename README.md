@@ -36,15 +36,6 @@ xdg-open docs/pr_dashboard.html
 start docs/pr_dashboard.html
 ```
 
-### Option 3: Use Python HTTP Server
-```bash
-# Start a local web server
-python -m http.server 8000 --directory docs
-
-# Then open in your browser:
-# http://localhost:8000/pr_dashboard.html
-```
-
 ---
 
 ## Features
