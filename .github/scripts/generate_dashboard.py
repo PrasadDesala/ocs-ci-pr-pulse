@@ -1111,6 +1111,7 @@ def main():
     
     # Save JSON data
     print("\nSaving dashboard data...")
+    os.makedirs('docs', exist_ok=True)
     with open('docs/dashboard_data.json', 'w') as f:
         json.dump(pr_data, f, indent=2)
     
