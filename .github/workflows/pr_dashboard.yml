@@ -1,11 +1,10 @@
 name: PR Dashboard Generator
 on:
   schedule:
-    - cron: '0 */2 * * *'  # Every 2 hours
+    - cron:  '*/30 * * * *'
   workflow_dispatch:
   push:
     branches:
-      - master
       - main
 
 permissions:
@@ -32,7 +31,7 @@ jobs:
       - name: Generate Dashboard Data
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO_NAME: ${{ github.repository }}
+          REPO_NAME: red-hat-storage/ocs-ci
         run: |
           python .github/scripts/generate_dashboard.py
       
@@ -42,5 +41,3 @@ jobs:
           git config --local user.name "github-actions[bot]"
           git add docs/pr_dashboard.html docs/dashboard_data.json
           git diff --quiet && git diff --staged --quiet || (git commit -m "Update PR dashboard [skip ci]" && git push)
-
-# Made with Bob
