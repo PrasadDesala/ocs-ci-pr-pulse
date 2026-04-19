@@ -1331,7 +1331,7 @@ def add_analytics_data(pr_data):
     history['snapshots'].append(snapshot)
     
     # Keep only last 30 days
-    cutoff_date = datetime.now() - timedelta(days=30)
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=30)
     history['snapshots'] = [
         s for s in history['snapshots']
         if datetime.fromisoformat(s['timestamp'].replace('Z', '+00:00')) > cutoff_date
