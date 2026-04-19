@@ -735,6 +735,38 @@ def generate_html_dashboard(pr_data):
                 <div class="card-value">{{ summary.avg_age_days }}</div>
             </div>
         </div>
+        <!-- Analytics Section -->
+        <div class="analytics-section" style="margin: 30px 0; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden;">
+            <div class="section-header" onclick="toggleAnalytics()" style="padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="margin: 0; font-size: 1.5em;">📈 Trends & Analytics</h2>
+                <button class="toggle-btn" id="analyticsToggle" style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 0.9em;">▼ Show Charts</button>
+            </div>
+            
+            <div id="analyticsContent" class="analytics-content" style="display: none; padding: 30px;">
+                <div class="charts-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 30px;">
+                    
+                    <!-- PR Volume Trend -->
+                    <div class="chart-container" style="background: #f8f9fa; padding: 25px; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                        <h3 style="margin: 0 0 20px 0; color: #1f2937; font-size: 1.1em;">📊 PR Volume Trend (Last 4 Weeks)</h3>
+                        <canvas id="volumeChart" style="max-height: 300px;"></canvas>
+                    </div>
+                    
+                    <!-- Status Distribution -->
+                    <div class="chart-container" style="background: #f8f9fa; padding: 25px; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                        <h3 style="margin: 0 0 20px 0; color: #1f2937; font-size: 1.1em;">🎯 Status Distribution</h3>
+                        <canvas id="statusChart" style="max-height: 300px;"></canvas>
+                    </div>
+                    
+                    <!-- Age Distribution -->
+                    <div class="chart-container" style="background: #f8f9fa; padding: 25px; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                        <h3 style="margin: 0 0 20px 0; color: #1f2937; font-size: 1.1em;">⏰ Age Distribution</h3>
+                        <canvas id="ageChart" style="max-height: 300px;"></canvas>
+                    </div>
+                    
+                </div>
+            </div>
+        </div>
+        
         
         <!-- Filters -->
         <div class="filters">
@@ -1066,11 +1098,156 @@ def generate_html_dashboard(pr_data):
             filterByCard('all');
         };
         
+        // Toggle analytics section
+        function toggleAnalytics() {
+            const content = document.getElementById('analyticsContent');
+            const button = document.getElementById('analyticsToggle');
+            
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                button.textContent = '▲ Hide Charts';
+                // Initialize charts when shown
+                if (!window.chartsInitialized) {
+                    initializeCharts();
+                    window.chartsInitialized = true;
+                }
+            } else {
+                content.style.display = 'none';
+                button.textContent = '▼ Show Charts';
+            }
+        }
+        
+        // Initialize charts
+        function initializeCharts() {
+            const analytics = {{ analytics|tojson }};
+            
+            // PR Volume Trend Chart
+            if (analytics.volume_trend && analytics.volume_trend.data.length > 0) {
+                const volumeCtx = document.getElementById('volumeChart').getContext('2d');
+                new Chart(volumeCtx, {
+                    type: 'line',
+                    data: {
+                        labels: analytics.volume_trend.labels,
+                        datasets: [{
+                            label: 'Open PRs',
+                            data: analytics.volume_trend.data,
+                            borderColor: '#667eea',
+                            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 5,
+                            pointHoverRadius: 7
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    stepSize: 10
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // Status Distribution Chart
+            const statusCtx = document.getElementById('statusChart').getContext('2d');
+            new Chart(statusCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: analytics.status_distribution.labels,
+                    datasets: [{
+                        data: analytics.status_distribution.data,
+                        backgroundColor: analytics.status_distribution.colors,
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed || 0;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return label + ': ' + value + ' (' + percentage + '%)';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Age Distribution Chart
+            const ageCtx = document.getElementById('ageChart').getContext('2d');
+            new Chart(ageCtx, {
+                type: 'bar',
+                data: {
+                    labels: analytics.age_distribution.labels,
+                    datasets: [{
+                        label: 'Number of PRs',
+                        data: analytics.age_distribution.data,
+                        backgroundColor: analytics.age_distribution.colors,
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return 'PRs: ' + context.parsed.y;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 10
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
         // Auto-refresh every 5 minutes
         setTimeout(() => {
             location.reload();
         }, 5 * 60 * 1000);
     </script>
+    
+    <!-- Chart.js Library -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </body>
 </html>
     ''')
@@ -1084,10 +1261,107 @@ def generate_html_dashboard(pr_data):
         stale_prs=pr_data['stale_prs'],
         summary=pr_data['summary'],
         all_labels=pr_data['all_labels'],
-        generated_at=generated_at
+        generated_at=generated_at,
+        analytics=pr_data.get('analytics', {})
     )
     
     return html
+
+def add_analytics_data(pr_data):
+    """Add analytics data for charts"""
+    from collections import defaultdict
+    
+    # Calculate status distribution
+    summary = pr_data['summary']
+    status_distribution = {
+        'labels': ['Needs Review', 'Needs Changes', 'Approved'],
+        'data': [
+            summary['waiting_reviewer'],
+            summary['waiting_author'],
+            summary['approved']
+        ],
+        'colors': ['#f59e0b', '#ef4444', '#10b981']
+    }
+    
+    # Calculate age distribution
+    age_buckets = {
+        '0-2 days': 0,
+        '3-7 days': 0,
+        '8-14 days': 0,
+        '15-30 days': 0,
+        '30+ days': 0
+    }
+    
+    for squad_prs in pr_data['by_squad'].values():
+        for pr in squad_prs:
+            age = pr['age_days']
+            if age <= 2:
+                age_buckets['0-2 days'] += 1
+            elif age <= 7:
+                age_buckets['3-7 days'] += 1
+            elif age <= 14:
+                age_buckets['8-14 days'] += 1
+            elif age <= 30:
+                age_buckets['15-30 days'] += 1
+            else:
+                age_buckets['30+ days'] += 1
+    
+    age_distribution = {
+        'labels': list(age_buckets.keys()),
+        'data': list(age_buckets.values()),
+        'colors': ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#991b1b']
+    }
+    
+    # Load and calculate volume trend
+    history_file = 'docs/dashboard_history.json'
+    history = {'snapshots': []}
+    
+    if os.path.exists(history_file):
+        with open(history_file, 'r') as f:
+            history = json.load(f)
+    
+    # Add current snapshot
+    snapshot = {
+        'timestamp': pr_data['generated_at'],
+        'total_open': summary['total_open'],
+        'waiting_reviewer': summary['waiting_reviewer'],
+        'waiting_author': summary['waiting_author'],
+        'approved': summary['approved']
+    }
+    history['snapshots'].append(snapshot)
+    
+    # Keep only last 30 days
+    cutoff_date = datetime.now() - timedelta(days=30)
+    history['snapshots'] = [
+        s for s in history['snapshots']
+        if datetime.fromisoformat(s['timestamp'].replace('Z', '+00:00')) > cutoff_date
+    ]
+    
+    # Save history
+    with open(history_file, 'w') as f:
+        json.dump(history, f, indent=2)
+    
+    # Calculate volume trend (last 4 weeks)
+    weekly_data = defaultdict(int)
+    for snapshot in history['snapshots']:
+        timestamp = datetime.fromisoformat(snapshot['timestamp'].replace('Z', '+00:00'))
+        week_key = timestamp.strftime('%Y-W%U')
+        weekly_data[week_key] = snapshot['total_open']
+    
+    sorted_weeks = sorted(weekly_data.keys())[-4:]
+    volume_trend = {
+        'labels': [f"Week {i+1}" for i in range(len(sorted_weeks))],
+        'data': [weekly_data[week] for week in sorted_weeks] if sorted_weeks else []
+    }
+    
+    # Add analytics to pr_data
+    pr_data['analytics'] = {
+        'status_distribution': status_distribution,
+        'age_distribution': age_distribution,
+        'volume_trend': volume_trend
+    }
+    
+    return pr_data
 
 
 def main():
@@ -1109,8 +1383,12 @@ def main():
     print(f"  - Approved: {pr_data['summary']['approved']}")
     print(f"  - Stale: {pr_data['summary']['stale']}")
     
+    # Add analytics data
+    print("\nAdding analytics data...")
+    pr_data = add_analytics_data(pr_data)
+    
     # Save JSON data
-    print("\nSaving dashboard data...")
+    print("Saving dashboard data...")
     os.makedirs('docs', exist_ok=True)
     with open('docs/dashboard_data.json', 'w') as f:
         json.dump(pr_data, f, indent=2)
