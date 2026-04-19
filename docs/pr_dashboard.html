@@ -385,7 +385,7 @@
         <div class="header">
             <h1>🔍 OCS-CI PR Pulse</h1>
             <div class="subtitle">Real-time Pull Request Status Tracking</div>
-            <div class="last-updated">Last Updated: 2026-04-19 22:34 UTC</div>
+            <div class="last-updated">Last Updated: 2026-04-19 23:28 UTC</div>
         </div>
         
         <div class="summary-cards">
@@ -418,6 +418,38 @@
                 <div class="card-value">94.0</div>
             </div>
         </div>
+        <!-- Analytics Section -->
+        <div class="analytics-section" style="margin: 30px 0; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden;">
+            <div class="section-header" onclick="toggleAnalytics()" style="padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="margin: 0; font-size: 1.5em;">📈 Trends & Analytics</h2>
+                <button class="toggle-btn" id="analyticsToggle" style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 0.9em;">▼ Show Charts</button>
+            </div>
+            
+            <div id="analyticsContent" class="analytics-content" style="display: none; padding: 30px;">
+                <div class="charts-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 30px;">
+                    
+                    <!-- PR Volume Trend -->
+                    <div class="chart-container" style="background: #f8f9fa; padding: 25px; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                        <h3 style="margin: 0 0 20px 0; color: #1f2937; font-size: 1.1em;">📊 PR Volume Trend (Last 4 Weeks)</h3>
+                        <canvas id="volumeChart" style="max-height: 300px;"></canvas>
+                    </div>
+                    
+                    <!-- Status Distribution -->
+                    <div class="chart-container" style="background: #f8f9fa; padding: 25px; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                        <h3 style="margin: 0 0 20px 0; color: #1f2937; font-size: 1.1em;">🎯 Status Distribution</h3>
+                        <canvas id="statusChart" style="max-height: 300px;"></canvas>
+                    </div>
+                    
+                    <!-- Age Distribution -->
+                    <div class="chart-container" style="background: #f8f9fa; padding: 25px; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                        <h3 style="margin: 0 0 20px 0; color: #1f2937; font-size: 1.1em;">⏰ Age Distribution</h3>
+                        <canvas id="ageChart" style="max-height: 300px;"></canvas>
+                    </div>
+                    
+                </div>
+            </div>
+        </div>
+        
         
         <!-- Filters -->
         <div class="filters">
@@ -794,6 +826,28 @@
                                 <td><span class="badge size-m">M</span></td>
                             </tr>
                             
+                            <tr data-status="waiting_reviewer" data-squad="black" data-size="XS" data-stale="true" data-draft="false" data-author="shyRozen" data-labels="size/S,needs-rebase">
+                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/14539" class="pr-link" target="_blank">#14539</a></td>
+                                <td>
+                                    Fix OBC UI locators for PF5/PF6 compatibility
+                                    
+                                    <span class="badge stale">STALE</span>
+                                </td>
+                                <td>shyRozen</td>
+                                <td>black</td>
+                                <td>
+                                    <span class="badge waiting-reviewer" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
+                                        NEEDS REVIEW
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="age-indicator age-old">
+                                        49d
+                                    </span>
+                                </td>
+                                <td><span class="badge size-xs">XS</span></td>
+                            </tr>
+                            
                             <tr data-status="waiting_reviewer" data-squad="black" data-size="XS" data-stale="false" data-draft="false" data-author="shyRozen" data-labels="size/S,needs-rebase">
                                 <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/14538" class="pr-link" target="_blank">#14538</a></td>
                                 <td>
@@ -811,28 +865,6 @@
                                 <td>
                                     <span class="age-indicator age-old">
                                         49d
-                                    </span>
-                                </td>
-                                <td><span class="badge size-xs">XS</span></td>
-                            </tr>
-                            
-                            <tr data-status="waiting_reviewer" data-squad="black" data-size="XS" data-stale="true" data-draft="false" data-author="shyRozen" data-labels="size/S,needs-rebase">
-                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/14539" class="pr-link" target="_blank">#14539</a></td>
-                                <td>
-                                    Fix OBC UI locators for PF5/PF6 compatibility
-                                    
-                                    <span class="badge stale">STALE</span>
-                                </td>
-                                <td>shyRozen</td>
-                                <td>black</td>
-                                <td>
-                                    <span class="badge waiting-reviewer" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
-                                        NEEDS REVIEW
-                                    </span>
-                                </td>
-                                <td>
-                                    <span class="age-indicator age-old">
-                                        48d
                                     </span>
                                 </td>
                                 <td><span class="badge size-xs">XS</span></td>
@@ -6223,11 +6255,156 @@
             filterByCard('all');
         };
         
+        // Toggle analytics section
+        function toggleAnalytics() {
+            const content = document.getElementById('analyticsContent');
+            const button = document.getElementById('analyticsToggle');
+            
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                button.textContent = '▲ Hide Charts';
+                // Initialize charts when shown
+                if (!window.chartsInitialized) {
+                    initializeCharts();
+                    window.chartsInitialized = true;
+                }
+            } else {
+                content.style.display = 'none';
+                button.textContent = '▼ Show Charts';
+            }
+        }
+        
+        // Initialize charts
+        function initializeCharts() {
+            const analytics = {"age_distribution": {"colors": ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#991b1b"], "data": [6, 30, 12, 27, 173], "labels": ["0-2 days", "3-7 days", "8-14 days", "15-30 days", "30+ days"]}, "status_distribution": {"colors": ["#f59e0b", "#ef4444", "#10b981"], "data": [150, 39, 59], "labels": ["Needs Review", "Needs Changes", "Approved"]}, "volume_trend": {"data": [248], "labels": ["Week 1"]}};
+            
+            // PR Volume Trend Chart
+            if (analytics.volume_trend && analytics.volume_trend.data.length > 0) {
+                const volumeCtx = document.getElementById('volumeChart').getContext('2d');
+                new Chart(volumeCtx, {
+                    type: 'line',
+                    data: {
+                        labels: analytics.volume_trend.labels,
+                        datasets: [{
+                            label: 'Open PRs',
+                            data: analytics.volume_trend.data,
+                            borderColor: '#667eea',
+                            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 5,
+                            pointHoverRadius: 7
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    stepSize: 10
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // Status Distribution Chart
+            const statusCtx = document.getElementById('statusChart').getContext('2d');
+            new Chart(statusCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: analytics.status_distribution.labels,
+                    datasets: [{
+                        data: analytics.status_distribution.data,
+                        backgroundColor: analytics.status_distribution.colors,
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed || 0;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return label + ': ' + value + ' (' + percentage + '%)';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Age Distribution Chart
+            const ageCtx = document.getElementById('ageChart').getContext('2d');
+            new Chart(ageCtx, {
+                type: 'bar',
+                data: {
+                    labels: analytics.age_distribution.labels,
+                    datasets: [{
+                        label: 'Number of PRs',
+                        data: analytics.age_distribution.data,
+                        backgroundColor: analytics.age_distribution.colors,
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return 'PRs: ' + context.parsed.y;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 10
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
         // Auto-refresh every 5 minutes
         setTimeout(() => {
             location.reload();
         }, 5 * 60 * 1000);
     </script>
+    
+    <!-- Chart.js Library -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </body>
 </html>
     
