@@ -378,6 +378,27 @@
                 padding: 8px;
             }
         }
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+        }
     </style>
 </head>
 <body>
@@ -385,7 +406,7 @@
         <div class="header">
             <h1>🔍 OCS-CI PR Pulse</h1>
             <div class="subtitle">Real-time Pull Request Status Tracking</div>
-            <div class="last-updated">Last Updated: 2026-04-20 05:40 UTC</div>
+            <div class="last-updated">Last Updated: 2026-04-20 06:25 UTC</div>
         </div>
         
         <div class="summary-cards">
@@ -395,7 +416,7 @@
             </div>
             <div class="card reviewer" onclick="filterByCard('waiting_reviewer')" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
                 <div class="card-label">Needs Review</div>
-                <div class="card-value">150</div>
+                <div class="card-value">149</div>
             </div>
             <div class="card author" onclick="filterByCard('waiting_author')" title="Needs Changes 🔴 - Reviewer requested changes OR left review comments (inline or body). Author hasn't pushed commits since review. Action: Author should address feedback">
                 <div class="card-label">Needs Changes</div>
@@ -403,7 +424,7 @@
             </div>
             <div class="card approved" onclick="filterByCard('approved')" title="Approved 🟢 - PR has been approved by one or more reviewers. Ready to merge. Action: Merge when ready">
                 <div class="card-label">Approved</div>
-                <div class="card-value">59</div>
+                <div class="card-value">60</div>
             </div>
             <div class="card stale" onclick="filterByCard('stale')" title="PRs with no activity for more than 7 days">
                 <div class="card-label">Stale (>7 days)</div>
@@ -415,7 +436,7 @@
             </div>
             <div class="card age" title="Average age of all open PRs in days">
                 <div class="card-label">Avg PR Age (days)</div>
-                <div class="card-value">93.3</div>
+                <div class="card-value">93.4</div>
             </div>
         </div>
         <!-- Analytics Section -->
@@ -430,13 +451,13 @@
                     
                     <!-- PR Volume Trend -->
                     <div class="chart-container" style="background: #f8f9fa; padding: 25px; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-                        <h3 style="margin: 0 0 20px 0; color: #1f2937; font-size: 1.1em;">📊 PR Volume Trend (Last 4 Weeks)</h3>
+                        <h3 style="margin: 0 0 20px 0; color: #1f2937; font-size: 1.1em;">📊 Total Open PRs Over Time (Last 4 Weeks)</h3>
                         <canvas id="volumeChart" style="max-height: 300px;"></canvas>
                     </div>
                     
                     <!-- Status Distribution -->
                     <div class="chart-container" style="background: #f8f9fa; padding: 25px; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-                        <h3 style="margin: 0 0 20px 0; color: #1f2937; font-size: 1.1em;">🎯 Status Distribution</h3>
+                        <h3 style="margin: 0 0 20px 0; color: #1f2937; font-size: 1.1em;">🎯 Status Distribution (with %)</h3>
                         <canvas id="statusChart" style="max-height: 300px;"></canvas>
                     </div>
                     
@@ -1117,7 +1138,7 @@
                             <tr data-status="waiting_reviewer" data-squad="blue" data-size="L" data-stale="false" data-draft="false" data-author="tchaitan-web" data-labels="team/e2e,size/XL,Squad/Magenta">
                                 <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/13849" class="pr-link" target="_blank">#13849</a></td>
                                 <td>
-                                    RHSTOR-7531 CephFS stale subvolume alert – happy path and stability scenarios
+                                    RHSTOR-7531 CephFS stale subvolume alert generation and stability scenarios
                                     
                                     
                                 </td>
@@ -1152,7 +1173,7 @@
                                 </td>
                                 <td>
                                     <span class="age-indicator age-old">
-                                        102d
+                                        103d
                                     </span>
                                 </td>
                                 <td><span class="badge size-l">L</span></td>
@@ -1468,28 +1489,6 @@
                                 <td><span class="badge size-m">M</span></td>
                             </tr>
                             
-                            <tr data-status="waiting_author" data-squad="brown" data-size="XS" data-stale="true" data-draft="false" data-author="suchita-g" data-labels="size/M,Squad/Brown">
-                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/14433" class="pr-link" target="_blank">#14433</a></td>
-                                <td>
-                                    tests: log non-running pods on test_reboot_on_tainted_node failure
-                                    
-                                    <span class="badge stale">STALE</span>
-                                </td>
-                                <td>suchita-g</td>
-                                <td>brown</td>
-                                <td>
-                                    <span class="badge waiting-author" title="Needs Changes 🔴 - Reviewer requested changes OR left review comments (inline or body). Author hasn't pushed commits since review. Action: Author should address feedback">
-                                        NEEDS CHANGES
-                                    </span>
-                                </td>
-                                <td>
-                                    <span class="age-indicator age-old">
-                                        60d
-                                    </span>
-                                </td>
-                                <td><span class="badge size-xs">XS</span></td>
-                            </tr>
-                            
                             <tr data-status="approved" data-squad="brown" data-size="XS" data-stale="true" data-draft="false" data-author="openshift-cherrypick-robot" data-labels="size/S,lgtm">
                                 <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/14427" class="pr-link" target="_blank">#14427</a></td>
                                 <td>
@@ -1506,7 +1505,7 @@
                                 </td>
                                 <td>
                                     <span class="age-indicator age-old">
-                                        60d
+                                        61d
                                     </span>
                                 </td>
                                 <td><span class="badge size-xs">XS</span></td>
@@ -1524,6 +1523,28 @@
                                 <td>
                                     <span class="badge approved" title="Approved 🟢 - PR has been approved by one or more reviewers. Ready to merge. Action: Merge when ready">
                                         APPROVED
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="age-indicator age-old">
+                                        61d
+                                    </span>
+                                </td>
+                                <td><span class="badge size-xs">XS</span></td>
+                            </tr>
+                            
+                            <tr data-status="waiting_author" data-squad="brown" data-size="XS" data-stale="true" data-draft="false" data-author="suchita-g" data-labels="size/M,Squad/Brown">
+                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/14433" class="pr-link" target="_blank">#14433</a></td>
+                                <td>
+                                    tests: log non-running pods on test_reboot_on_tainted_node failure
+                                    
+                                    <span class="badge stale">STALE</span>
+                                </td>
+                                <td>suchita-g</td>
+                                <td>brown</td>
+                                <td>
+                                    <span class="badge waiting-author" title="Needs Changes 🔴 - Reviewer requested changes OR left review comments (inline or body). Author hasn't pushed commits since review. Action: Author should address feedback">
+                                        NEEDS CHANGES
                                     </span>
                                 </td>
                                 <td>
@@ -1776,6 +1797,28 @@
                                 <td><span class="badge size-xs">XS</span></td>
                             </tr>
                             
+                            <tr data-status="waiting_reviewer" data-squad="brown" data-size="XS" data-stale="true" data-draft="false" data-author="amr1ta" data-labels="size/S">
+                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/14832" class="pr-link" target="_blank">#14832</a></td>
+                                <td>
+                                    Fixed odf-cli path issue (#14080)
+                                    
+                                    <span class="badge stale">STALE</span>
+                                </td>
+                                <td>amr1ta</td>
+                                <td>brown</td>
+                                <td>
+                                    <span class="badge waiting-reviewer" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
+                                        NEEDS REVIEW
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="age-indicator age-old">
+                                        14d
+                                    </span>
+                                </td>
+                                <td><span class="badge size-xs">XS</span></td>
+                            </tr>
+                            
                             <tr data-status="waiting_reviewer" data-squad="brown" data-size="S" data-stale="true" data-draft="false" data-author="amr1ta" data-labels="size/L">
                                 <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/14831" class="pr-link" target="_blank">#14831</a></td>
                                 <td>
@@ -1796,28 +1839,6 @@
                                     </span>
                                 </td>
                                 <td><span class="badge size-s">S</span></td>
-                            </tr>
-                            
-                            <tr data-status="waiting_reviewer" data-squad="brown" data-size="XS" data-stale="true" data-draft="false" data-author="amr1ta" data-labels="size/S">
-                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/14832" class="pr-link" target="_blank">#14832</a></td>
-                                <td>
-                                    Fixed odf-cli path issue (#14080)
-                                    
-                                    <span class="badge stale">STALE</span>
-                                </td>
-                                <td>amr1ta</td>
-                                <td>brown</td>
-                                <td>
-                                    <span class="badge waiting-reviewer" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
-                                        NEEDS REVIEW
-                                    </span>
-                                </td>
-                                <td>
-                                    <span class="age-indicator age-old">
-                                        13d
-                                    </span>
-                                </td>
-                                <td><span class="badge size-xs">XS</span></td>
                             </tr>
                             
                             <tr data-status="waiting_reviewer" data-squad="brown" data-size="S" data-stale="false" data-draft="false" data-author="amr1ta" data-labels="size/L">
@@ -2036,7 +2057,7 @@
                                 </td>
                                 <td>
                                     <span class="age-indicator age-old">
-                                        332d
+                                        333d
                                     </span>
                                 </td>
                                 <td><span class="badge size-xs">XS</span></td>
@@ -2278,7 +2299,7 @@
                                 </td>
                                 <td>
                                     <span class="age-indicator age-old">
-                                        229d
+                                        230d
                                     </span>
                                 </td>
                                 <td><span class="badge size-xs">XS</span></td>
@@ -2630,7 +2651,7 @@
                                 </td>
                                 <td>
                                     <span class="age-indicator age-old">
-                                        90d
+                                        91d
                                     </span>
                                 </td>
                                 <td><span class="badge size-xs">XS</span></td>
@@ -4572,7 +4593,7 @@
                                 <td><span class="badge size-xs">XS</span></td>
                             </tr>
                             
-                            <tr data-status="waiting_reviewer" data-squad="general" data-size="XS" data-stale="false" data-draft="false" data-author="dahorak" data-labels="size/XS,cherry-pick">
+                            <tr data-status="waiting_reviewer" data-squad="general" data-size="XS" data-stale="false" data-draft="false" data-author="dahorak" data-labels="team/ecosystem,size/XS,cherry-pick">
                                 <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/14928" class="pr-link" target="_blank">#14928</a></td>
                                 <td>
                                     [release-4.19] disable W/A for DFBUGS-3777
@@ -4594,7 +4615,7 @@
                                 <td><span class="badge size-xs">XS</span></td>
                             </tr>
                             
-                            <tr data-status="waiting_reviewer" data-squad="general" data-size="XS" data-stale="false" data-draft="false" data-author="openshift-cherrypick-robot" data-labels="team/ecosystem,size/XS,cherry-pick">
+                            <tr data-status="approved" data-squad="general" data-size="XS" data-stale="false" data-draft="false" data-author="openshift-cherrypick-robot" data-labels="team/ecosystem,size/XS,lgtm,cherry-pick">
                                 <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/14927" class="pr-link" target="_blank">#14927</a></td>
                                 <td>
                                     [release-4.20] disable W/A for DFBUGS-3777
@@ -4604,8 +4625,8 @@
                                 <td>openshift-cherrypick-robot</td>
                                 <td>general</td>
                                 <td>
-                                    <span class="badge waiting-reviewer" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
-                                        NEEDS REVIEW
+                                    <span class="badge approved" title="Approved 🟢 - PR has been approved by one or more reviewers. Ready to merge. Action: Merge when ready">
+                                        APPROVED
                                     </span>
                                 </td>
                                 <td>
@@ -4946,7 +4967,7 @@
                                 </td>
                                 <td>
                                     <span class="age-indicator age-old">
-                                        172d
+                                        173d
                                     </span>
                                 </td>
                                 <td><span class="badge size-xl">XL</span></td>
@@ -5282,7 +5303,7 @@
                                 </td>
                                 <td>
                                     <span class="age-indicator age-old">
-                                        145d
+                                        146d
                                     </span>
                                 </td>
                                 <td><span class="badge size-xs">XS</span></td>
@@ -5592,7 +5613,7 @@
                                 </td>
                                 <td>
                                     <span class="age-indicator age-old">
-                                        222d
+                                        223d
                                     </span>
                                 </td>
                                 <td><span class="badge size-s">S</span></td>
@@ -5614,7 +5635,7 @@
                                 </td>
                                 <td>
                                     <span class="age-indicator age-old">
-                                        222d
+                                        223d
                                     </span>
                                 </td>
                                 <td><span class="badge size-xs">XS</span></td>
@@ -5708,6 +5729,28 @@
                                 <td><span class="badge size-m">M</span></td>
                             </tr>
                             
+                            <tr data-status="waiting_reviewer" data-squad="turquoise" data-size="S" data-stale="false" data-draft="false" data-author="prsurve" data-labels="size/L,DR,Squad/Turquoise">
+                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/13580" class="pr-link" target="_blank">#13580</a></td>
+                                <td>
+                                    Changes to support running rdr test from ibm repo
+                                    
+                                    
+                                </td>
+                                <td>prsurve</td>
+                                <td>turquoise</td>
+                                <td>
+                                    <span class="badge waiting-reviewer" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
+                                        NEEDS REVIEW
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="age-indicator age-old">
+                                        160d
+                                    </span>
+                                </td>
+                                <td><span class="badge size-s">S</span></td>
+                            </tr>
+                            
                             <tr data-status="waiting_reviewer" data-squad="turquoise" data-size="M" data-stale="true" data-draft="false" data-author="amr1ta" data-labels="size/L">
                                 <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/13568" class="pr-link" target="_blank">#13568</a></td>
                                 <td>
@@ -5728,28 +5771,6 @@
                                     </span>
                                 </td>
                                 <td><span class="badge size-m">M</span></td>
-                            </tr>
-                            
-                            <tr data-status="waiting_reviewer" data-squad="turquoise" data-size="S" data-stale="false" data-draft="false" data-author="prsurve" data-labels="size/L,DR,Squad/Turquoise">
-                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/13580" class="pr-link" target="_blank">#13580</a></td>
-                                <td>
-                                    Changes to support running rdr test from ibm repo
-                                    
-                                    
-                                </td>
-                                <td>prsurve</td>
-                                <td>turquoise</td>
-                                <td>
-                                    <span class="badge waiting-reviewer" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
-                                        NEEDS REVIEW
-                                    </span>
-                                </td>
-                                <td>
-                                    <span class="age-indicator age-old">
-                                        159d
-                                    </span>
-                                </td>
-                                <td><span class="badge size-s">S</span></td>
                             </tr>
                             
                             <tr data-status="waiting_reviewer" data-squad="turquoise" data-size="M" data-stale="true" data-draft="false" data-author="Nikhil-Ladha" data-labels="size/L">
@@ -5900,7 +5921,7 @@
                                 </td>
                                 <td>
                                     <span class="age-indicator age-old">
-                                        48d
+                                        49d
                                     </span>
                                 </td>
                                 <td><span class="badge size-l">L</span></td>
@@ -5988,7 +6009,7 @@
                                 </td>
                                 <td>
                                     <span class="age-indicator age-old">
-                                        25d
+                                        26d
                                     </span>
                                 </td>
                                 <td><span class="badge size-xl">XL</span></td>
@@ -6299,6 +6320,72 @@
             filterByCard('all');
         };
         
+        // Filter PRs by age range
+        function filterByAgeRange(ageRange) {
+            // Parse age range
+            let minAge = 0;
+            let maxAge = Infinity;
+            
+            if (ageRange === '0-2 days') {
+                minAge = 0;
+                maxAge = 2;
+            } else if (ageRange === '3-7 days') {
+                minAge = 3;
+                maxAge = 7;
+            } else if (ageRange === '8-14 days') {
+                minAge = 8;
+                maxAge = 14;
+            } else if (ageRange === '15-30 days') {
+                minAge = 15;
+                maxAge = 30;
+            } else if (ageRange === '30-60 days') {
+                minAge = 30;
+                maxAge = 60;
+            } else if (ageRange === '60+ days') {
+                minAge = 60;
+                maxAge = Infinity;
+            }
+            
+            // Filter table rows
+            let visibleCount = 0;
+            const rows = document.querySelectorAll('#prTable tbody tr');
+            
+            rows.forEach(row => {
+                const ageText = row.cells[5].textContent.trim();
+                const age = parseInt(ageText.replace('d', ''));
+                
+                if (age >= minAge && age <= maxAge) {
+                    row.style.display = '';
+                    visibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+            
+            // Update visible count and title
+            document.getElementById('visibleCount').textContent = visibleCount + ' PRs';
+            document.getElementById('tableTitle').textContent = 'PRs aged ' + ageRange;
+            
+            // Scroll to table
+            document.getElementById('prTable').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            
+            // Show notification
+            showNotification('Filtered to ' + visibleCount + ' PRs aged ' + ageRange);
+        }
+        
+        // Show notification
+        function showNotification(message) {
+            const notification = document.createElement('div');
+            notification.textContent = message;
+            notification.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #667eea; color: white; padding: 15px 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 10000; animation: slideIn 0.3s ease-out;';
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease-out';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+        
         // Toggle analytics section
         function toggleAnalytics() {
             const content = document.getElementById('analyticsContent');
@@ -6320,7 +6407,7 @@
         
         // Initialize charts
         function initializeCharts() {
-            const analytics = {"age_distribution": {"colors": ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#991b1b"], "data": [8, 30, 12, 27, 173], "labels": ["0-2 days", "3-7 days", "8-14 days", "15-30 days", "30+ days"]}, "status_distribution": {"colors": ["#f59e0b", "#ef4444", "#10b981"], "data": [150, 41, 59], "labels": ["Needs Review", "Needs Changes", "Approved"]}, "volume_trend": {"data": [250], "labels": ["Week 1"]}};
+            const analytics = {"age_distribution": {"colors": ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#991b1b", "#7f1d1d"], "data": [8, 30, 12, 27, 59, 114], "labels": ["0-2 days", "3-7 days", "8-14 days", "15-30 days", "30-60 days", "60+ days"]}, "status_distribution": {"colors": ["#f59e0b", "#ef4444", "#10b981"], "data": [149, 41, 60], "labels": ["Needs Review", "Needs Changes", "Approved"]}, "volume_trend": {"data": [250], "labels": ["Week 1"]}};
             
             // PR Volume Trend Chart
             if (analytics.volume_trend && analytics.volume_trend.data.length > 0) {
@@ -6403,7 +6490,7 @@
             
             // Age Distribution Chart
             const ageCtx = document.getElementById('ageChart').getContext('2d');
-            new Chart(ageCtx, {
+            const ageChart = new Chart(ageCtx, {
                 type: 'bar',
                 data: {
                     labels: analytics.age_distribution.labels,
@@ -6424,7 +6511,7 @@
                         tooltip: {
                             callbacks: {
                                 label: function(context) {
-                                    return 'PRs: ' + context.parsed.y;
+                                    return 'PRs: ' + context.parsed.y + ' (click to filter)';
                                 }
                             }
                         }
@@ -6435,6 +6522,13 @@
                             ticks: {
                                 stepSize: 10
                             }
+                        }
+                    },
+                    onClick: (event, activeElements) => {
+                        if (activeElements.length > 0) {
+                            const index = activeElements[0].index;
+                            const ageRange = analytics.age_distribution.labels[index];
+                            filterByAgeRange(ageRange);
                         }
                     }
                 }
