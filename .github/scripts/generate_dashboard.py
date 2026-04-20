@@ -695,6 +695,27 @@ def generate_html_dashboard(pr_data):
                 padding: 8px;
             }
         }
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+        }
     </style>
 </head>
 <body>
@@ -747,13 +768,13 @@ def generate_html_dashboard(pr_data):
                     
                     <!-- PR Volume Trend -->
                     <div class="chart-container" style="background: #f8f9fa; padding: 25px; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-                        <h3 style="margin: 0 0 20px 0; color: #1f2937; font-size: 1.1em;">📊 PR Volume Trend (Last 4 Weeks)</h3>
+                        <h3 style="margin: 0 0 20px 0; color: #1f2937; font-size: 1.1em;">📊 Total Open PRs Over Time (Last 4 Weeks)</h3>
                         <canvas id="volumeChart" style="max-height: 300px;"></canvas>
                     </div>
                     
                     <!-- Status Distribution -->
                     <div class="chart-container" style="background: #f8f9fa; padding: 25px; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-                        <h3 style="margin: 0 0 20px 0; color: #1f2937; font-size: 1.1em;">🎯 Status Distribution</h3>
+                        <h3 style="margin: 0 0 20px 0; color: #1f2937; font-size: 1.1em;">🎯 Status Distribution (with %)</h3>
                         <canvas id="statusChart" style="max-height: 300px;"></canvas>
                     </div>
                     
@@ -1098,6 +1119,72 @@ def generate_html_dashboard(pr_data):
             filterByCard('all');
         };
         
+        // Filter PRs by age range
+        function filterByAgeRange(ageRange) {
+            // Parse age range
+            let minAge = 0;
+            let maxAge = Infinity;
+            
+            if (ageRange === '0-2 days') {
+                minAge = 0;
+                maxAge = 2;
+            } else if (ageRange === '3-7 days') {
+                minAge = 3;
+                maxAge = 7;
+            } else if (ageRange === '8-14 days') {
+                minAge = 8;
+                maxAge = 14;
+            } else if (ageRange === '15-30 days') {
+                minAge = 15;
+                maxAge = 30;
+            } else if (ageRange === '30-60 days') {
+                minAge = 30;
+                maxAge = 60;
+            } else if (ageRange === '60+ days') {
+                minAge = 60;
+                maxAge = Infinity;
+            }
+            
+            // Filter table rows
+            let visibleCount = 0;
+            const rows = document.querySelectorAll('#prTable tbody tr');
+            
+            rows.forEach(row => {
+                const ageText = row.cells[5].textContent.trim();
+                const age = parseInt(ageText.replace('d', ''));
+                
+                if (age >= minAge && age <= maxAge) {
+                    row.style.display = '';
+                    visibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+            
+            // Update visible count and title
+            document.getElementById('visibleCount').textContent = visibleCount + ' PRs';
+            document.getElementById('tableTitle').textContent = 'PRs aged ' + ageRange;
+            
+            // Scroll to table
+            document.getElementById('prTable').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            
+            // Show notification
+            showNotification('Filtered to ' + visibleCount + ' PRs aged ' + ageRange);
+        }
+        
+        // Show notification
+        function showNotification(message) {
+            const notification = document.createElement('div');
+            notification.textContent = message;
+            notification.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #667eea; color: white; padding: 15px 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 10000; animation: slideIn 0.3s ease-out;';
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease-out';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+        
         // Toggle analytics section
         function toggleAnalytics() {
             const content = document.getElementById('analyticsContent');
@@ -1202,7 +1289,7 @@ def generate_html_dashboard(pr_data):
             
             // Age Distribution Chart
             const ageCtx = document.getElementById('ageChart').getContext('2d');
-            new Chart(ageCtx, {
+            const ageChart = new Chart(ageCtx, {
                 type: 'bar',
                 data: {
                     labels: analytics.age_distribution.labels,
@@ -1223,7 +1310,7 @@ def generate_html_dashboard(pr_data):
                         tooltip: {
                             callbacks: {
                                 label: function(context) {
-                                    return 'PRs: ' + context.parsed.y;
+                                    return 'PRs: ' + context.parsed.y + ' (click to filter)';
                                 }
                             }
                         }
@@ -1234,6 +1321,13 @@ def generate_html_dashboard(pr_data):
                             ticks: {
                                 stepSize: 10
                             }
+                        }
+                    },
+                    onClick: (event, activeElements) => {
+                        if (activeElements.length > 0) {
+                            const index = activeElements[0].index;
+                            const ageRange = analytics.age_distribution.labels[index];
+                            filterByAgeRange(ageRange);
                         }
                     }
                 }
@@ -1289,7 +1383,8 @@ def add_analytics_data(pr_data):
         '3-7 days': 0,
         '8-14 days': 0,
         '15-30 days': 0,
-        '30+ days': 0
+        '30-60 days': 0,
+        '60+ days': 0
     }
     
     for squad_prs in pr_data['by_squad'].values():
@@ -1303,13 +1398,15 @@ def add_analytics_data(pr_data):
                 age_buckets['8-14 days'] += 1
             elif age <= 30:
                 age_buckets['15-30 days'] += 1
+            elif age <= 60:
+                age_buckets['30-60 days'] += 1
             else:
-                age_buckets['30+ days'] += 1
+                age_buckets['60+ days'] += 1
     
     age_distribution = {
         'labels': list(age_buckets.keys()),
         'data': list(age_buckets.values()),
-        'colors': ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#991b1b']
+        'colors': ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#991b1b', '#7f1d1d']
     }
     
     # Load and calculate volume trend
