@@ -406,7 +406,7 @@
         <div class="header">
             <h1>🔍 OCS-CI PR Pulse</h1>
             <div class="subtitle">Real-time Pull Request Status Tracking</div>
-            <div class="last-updated">Last Updated: 2026-05-07 22:57 UTC</div>
+            <div class="last-updated">Last Updated: 2026-05-08 02:35 UTC</div>
         </div>
         
         <div class="summary-cards">
@@ -416,11 +416,11 @@
             </div>
             <div class="card reviewer" onclick="filterByCard('waiting_reviewer')" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
                 <div class="card-label">Needs Review</div>
-                <div class="card-value">158</div>
+                <div class="card-value">157</div>
             </div>
             <div class="card author" onclick="filterByCard('waiting_author')" title="Needs Changes 🔴 - Reviewer requested changes OR left review comments (inline or body). Author hasn't pushed commits since review. Action: Author should address feedback">
                 <div class="card-label">Needs Changes</div>
-                <div class="card-value">35</div>
+                <div class="card-value">36</div>
             </div>
             <div class="card approved" onclick="filterByCard('approved')" title="Approved 🟢 - PR has been approved by one or more reviewers. Ready to merge. Action: Merge when ready">
                 <div class="card-label">Approved</div>
@@ -3245,7 +3245,7 @@
                                 </td>
                                 <td>
                                     <span class="age-indicator age-old">
-                                        54d
+                                        55d
                                     </span>
                                 </td>
                                 <td><span class="badge size-xs">XS</span></td>
@@ -4125,7 +4125,7 @@
                                 </td>
                                 <td>
                                     <span class="age-indicator age-old">
-                                        11d
+                                        12d
                                     </span>
                                 </td>
                                 <td><span class="badge size-xs">XS</span></td>
@@ -5417,7 +5417,7 @@
                                 <td><span class="badge size-xl">XL</span></td>
                             </tr>
                             
-                            <tr data-status="waiting_reviewer" data-squad="purple" data-size="L" data-stale="false" data-draft="true" data-author="deepshikhaaa" data-labels="size/XL,do-not-merge/work-in-progress">
+                            <tr data-status="waiting_author" data-squad="purple" data-size="L" data-stale="false" data-draft="true" data-author="deepshikhaaa" data-labels="size/XL,do-not-merge/work-in-progress">
                                 <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/15063" class="pr-link" target="_blank">#15063</a></td>
                                 <td>
                                     [WIP]Add functionality to upgrade from ODF to FDF
@@ -5427,8 +5427,8 @@
                                 <td>deepshikhaaa</td>
                                 <td>purple</td>
                                 <td>
-                                    <span class="badge waiting-reviewer" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
-                                        NEEDS REVIEW
+                                    <span class="badge waiting-author" title="Needs Changes 🔴 - Reviewer requested changes OR left review comments (inline or body). Author hasn't pushed commits since review. Action: Author should address feedback">
+                                        NEEDS CHANGES
                                     </span>
                                 </td>
                                 <td>
@@ -6759,7 +6759,7 @@
         
         // Initialize charts
         function initializeCharts() {
-            const analytics = {"age_distribution": {"colors": ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#991b1b", "#7f1d1d"], "data": [31, 10, 23, 35, 37, 130], "labels": ["0-2 days", "3-7 days", "8-14 days", "15-30 days", "30-60 days", "60+ days"]}, "status_distribution": {"colors": ["#f59e0b", "#ef4444", "#10b981"], "data": [158, 35, 73], "labels": ["Needs Review", "Needs Changes", "Approved"]}, "volume_trend": {"data": [266], "labels": ["Week 1"]}};
+            const analytics = {"age_distribution": {"colors": ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#991b1b", "#7f1d1d"], "data": [31, 10, 23, 35, 37, 130], "labels": ["0-2 days", "3-7 days", "8-14 days", "15-30 days", "30-60 days", "60+ days"]}, "status_distribution": {"colors": ["#f59e0b", "#ef4444", "#10b981"], "data": [157, 36, 73], "labels": ["Needs Review", "Needs Changes", "Approved"]}, "volume_trend": {"data": [266], "labels": ["Week 1"]}};
             
             // PR Volume Trend Chart
             if (analytics.volume_trend && analytics.volume_trend.data.length > 0) {
