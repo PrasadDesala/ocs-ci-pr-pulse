@@ -406,17 +406,17 @@
         <div class="header">
             <h1>🔍 OCS-CI PR Pulse</h1>
             <div class="subtitle">Real-time Pull Request Status Tracking</div>
-            <div class="last-updated">Last Updated: 2026-09-14 21:18 UTC</div>
+            <div class="last-updated">Last Updated: 2026-09-15 00:10 UTC</div>
         </div>
         
         <div class="summary-cards">
             <div class="card total" onclick="filterByCard('all')" title="Total number of open pull requests">
                 <div class="card-label">Total Open PRs</div>
-                <div class="card-value">334</div>
+                <div class="card-value">333</div>
             </div>
             <div class="card reviewer" onclick="filterByCard('waiting_reviewer')" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
                 <div class="card-label">Needs Review</div>
-                <div class="card-value">255</div>
+                <div class="card-value">254</div>
             </div>
             <div class="card author" onclick="filterByCard('waiting_author')" title="Needs Changes 🔴 - Reviewer requested changes OR left review comments (inline or body). Author hasn't pushed commits since review. Action: Author should address feedback">
                 <div class="card-label">Needs Changes</div>
@@ -428,7 +428,7 @@
             </div>
             <div class="card stale" onclick="filterByCard('stale')" title="PRs with no activity for more than 7 days">
                 <div class="card-label">Stale (>7 days)</div>
-                <div class="card-value">235</div>
+                <div class="card-value">242</div>
             </div>
             <div class="card draft" onclick="filterByCard('draft')" title="Draft or work-in-progress pull requests">
                 <div class="card-label">Draft / WIP</div>
@@ -542,7 +542,7 @@
             <div class="squad-section">
                 <div class="squad-header">
                     <span class="squad-name" id="tableTitle">All Open Pull Requests</span>
-                    <span class="squad-count" id="visibleCount">334 PRs</span>
+                    <span class="squad-count" id="visibleCount">333 PRs</span>
                 </div>
                 <table class="pr-table" id="prTable">
                     <thead>
@@ -955,12 +955,12 @@
                                 <td><span class="badge size-s">S</span></td>
                             </tr>
                             
-                            <tr data-status="waiting_reviewer" data-squad="black" data-size="XS" data-stale="false" data-draft="false" data-author="openshift-cherrypick-robot" data-labels="size/S,needs-rebase">
+                            <tr data-status="waiting_reviewer" data-squad="black" data-size="XS" data-stale="true" data-draft="false" data-author="openshift-cherrypick-robot" data-labels="size/S,needs-rebase">
                                 <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/15921" class="pr-link" target="_blank">#15921</a></td>
                                 <td>
                                     [release-4.22] fix ACM cluster switcher
                                     
-                                    
+                                    <span class="badge stale">STALE</span>
                                 </td>
                                 <td>openshift-cherrypick-robot</td>
                                 <td>black</td>
@@ -1419,12 +1419,12 @@
                                 <td><span class="badge size-xl">XL</span></td>
                             </tr>
                             
-                            <tr data-status="waiting_reviewer" data-squad="blue" data-size="M" data-stale="false" data-draft="false" data-author="suchita-g" data-labels="size/L,needs-rebase">
+                            <tr data-status="waiting_reviewer" data-squad="blue" data-size="M" data-stale="true" data-draft="false" data-author="suchita-g" data-labels="size/L,needs-rebase">
                                 <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/15856" class="pr-link" target="_blank">#15856</a></td>
                                 <td>
                                     Add advanced alert rule validation tests for ocs-metrics-exporter
                                     
-                                    
+                                    <span class="badge stale">STALE</span>
                                 </td>
                                 <td>suchita-g</td>
                                 <td>blue</td>
@@ -1463,12 +1463,12 @@
                                 <td><span class="badge size-xl">XL</span></td>
                             </tr>
                             
-                            <tr data-status="waiting_reviewer" data-squad="blue" data-size="L" data-stale="false" data-draft="false" data-author="suchita-g" data-labels="size/XL,needs-rebase">
+                            <tr data-status="waiting_reviewer" data-squad="blue" data-size="L" data-stale="true" data-draft="false" data-author="suchita-g" data-labels="size/XL,needs-rebase">
                                 <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/15864" class="pr-link" target="_blank">#15864</a></td>
                                 <td>
                                     RHSTOR-7964: Add ocs-metrics-exporter deployment and health validation test
                                     
-                                    
+                                    <span class="badge stale">STALE</span>
                                 </td>
                                 <td>suchita-g</td>
                                 <td>blue</td>
@@ -1485,12 +1485,12 @@
                                 <td><span class="badge size-l">L</span></td>
                             </tr>
                             
-                            <tr data-status="waiting_reviewer" data-squad="blue" data-size="M" data-stale="false" data-draft="false" data-author="suchita-g" data-labels="size/L,needs-rebase">
+                            <tr data-status="waiting_reviewer" data-squad="blue" data-size="M" data-stale="true" data-draft="false" data-author="suchita-g" data-labels="size/L,needs-rebase">
                                 <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/15859" class="pr-link" target="_blank">#15859</a></td>
                                 <td>
                                     Add HighRBDCloneSnapshotCount alert tests for ocs-metrics-exporter
                                     
-                                    
+                                    <span class="badge stale">STALE</span>
                                 </td>
                                 <td>suchita-g</td>
                                 <td>blue</td>
@@ -1507,12 +1507,12 @@
                                 <td><span class="badge size-m">M</span></td>
                             </tr>
                             
-                            <tr data-status="waiting_reviewer" data-squad="blue" data-size="L" data-stale="false" data-draft="false" data-author="suchita-g" data-labels="size/XL,needs-rebase">
+                            <tr data-status="waiting_reviewer" data-squad="blue" data-size="L" data-stale="true" data-draft="false" data-author="suchita-g" data-labels="size/XL,needs-rebase">
                                 <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/15907" class="pr-link" target="_blank">#15907</a></td>
                                 <td>
                                     Add ocs-metrics-exporter deployment tuning and performance test (RHSOR-7964)
                                     
-                                    
+                                    <span class="badge stale">STALE</span>
                                 </td>
                                 <td>suchita-g</td>
                                 <td>blue</td>
@@ -1529,12 +1529,12 @@
                                 <td><span class="badge size-l">L</span></td>
                             </tr>
                             
-                            <tr data-status="waiting_reviewer" data-squad="blue" data-size="M" data-stale="false" data-draft="false" data-author="suchita-g" data-labels="size/L,needs-rebase">
+                            <tr data-status="waiting_reviewer" data-squad="blue" data-size="M" data-stale="true" data-draft="false" data-author="suchita-g" data-labels="size/L,needs-rebase">
                                 <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/15914" class="pr-link" target="_blank">#15914</a></td>
                                 <td>
                                     RHSTOR-7964: Add dedicated Ceph credentials test for ocs-metrics-exporter
                                     
-                                    
+                                    <span class="badge stale">STALE</span>
                                 </td>
                                 <td>suchita-g</td>
                                 <td>blue</td>
@@ -1729,12 +1729,34 @@
                                 <td><span class="badge size-xs">XS</span></td>
                             </tr>
                             
-                            <tr data-status="waiting_reviewer" data-squad="brown" data-size="XS" data-stale="false" data-draft="false" data-author="shyRozen" data-labels="size/M,lifecycle/stale,Automatic AI generated">
+                            <tr data-status="waiting_reviewer" data-squad="brown" data-size="XS" data-stale="true" data-draft="false" data-author="shyRozen" data-labels="size/M,lifecycle/stale,Automatic AI generated">
+                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/15331" class="pr-link" target="_blank">#15331</a></td>
+                                <td>
+                                    [z-stream 4.18.1] Enable 30 tests for validation
+                                    
+                                    <span class="badge stale">STALE</span>
+                                </td>
+                                <td>shyRozen</td>
+                                <td>brown</td>
+                                <td>
+                                    <span class="badge waiting-reviewer" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
+                                        NEEDS REVIEW
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="age-indicator age-old">
+                                        97d
+                                    </span>
+                                </td>
+                                <td><span class="badge size-xs">XS</span></td>
+                            </tr>
+                            
+                            <tr data-status="waiting_reviewer" data-squad="brown" data-size="XS" data-stale="true" data-draft="false" data-author="shyRozen" data-labels="size/M,lifecycle/stale,Automatic AI generated">
                                 <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/15329" class="pr-link" target="_blank">#15329</a></td>
                                 <td>
                                     [z-stream 4.18.1] Enable 30 tests for validation
                                     
-                                    
+                                    <span class="badge stale">STALE</span>
                                 </td>
                                 <td>shyRozen</td>
                                 <td>brown</td>
@@ -1751,12 +1773,12 @@
                                 <td><span class="badge size-xs">XS</span></td>
                             </tr>
                             
-                            <tr data-status="waiting_reviewer" data-squad="brown" data-size="XS" data-stale="false" data-draft="false" data-author="shyRozen" data-labels="size/M,lifecycle/stale,Automatic AI generated">
+                            <tr data-status="waiting_reviewer" data-squad="brown" data-size="XS" data-stale="true" data-draft="false" data-author="shyRozen" data-labels="size/M,lifecycle/stale,Automatic AI generated">
                                 <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/15328" class="pr-link" target="_blank">#15328</a></td>
                                 <td>
                                     [z-stream 4.18.1] Enable 30 tests for validation
                                     
-                                    
+                                    <span class="badge stale">STALE</span>
                                 </td>
                                 <td>shyRozen</td>
                                 <td>brown</td>
@@ -1773,12 +1795,12 @@
                                 <td><span class="badge size-xs">XS</span></td>
                             </tr>
                             
-                            <tr data-status="waiting_reviewer" data-squad="brown" data-size="XS" data-stale="false" data-draft="false" data-author="shyRozen" data-labels="size/M,lifecycle/stale,Automatic AI generated">
+                            <tr data-status="waiting_reviewer" data-squad="brown" data-size="XS" data-stale="true" data-draft="false" data-author="shyRozen" data-labels="size/M,lifecycle/stale,Automatic AI generated">
                                 <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/15327" class="pr-link" target="_blank">#15327</a></td>
                                 <td>
                                     [z-stream 4.18.1] Enable 30 tests for validation
                                     
-                                    
+                                    <span class="badge stale">STALE</span>
                                 </td>
                                 <td>shyRozen</td>
                                 <td>brown</td>
@@ -1795,12 +1817,12 @@
                                 <td><span class="badge size-xs">XS</span></td>
                             </tr>
                             
-                            <tr data-status="waiting_reviewer" data-squad="brown" data-size="XS" data-stale="false" data-draft="false" data-author="shyRozen" data-labels="size/M,lifecycle/stale,Automatic AI generated">
+                            <tr data-status="waiting_reviewer" data-squad="brown" data-size="XS" data-stale="true" data-draft="false" data-author="shyRozen" data-labels="size/M,lifecycle/stale,Automatic AI generated">
                                 <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/15326" class="pr-link" target="_blank">#15326</a></td>
                                 <td>
                                     [z-stream 4.18.1] Enable 30 tests for validation
                                     
-                                    
+                                    <span class="badge stale">STALE</span>
                                 </td>
                                 <td>shyRozen</td>
                                 <td>brown</td>
@@ -1929,28 +1951,6 @@
                             
                             <tr data-status="waiting_reviewer" data-squad="brown" data-size="XS" data-stale="false" data-draft="false" data-author="shyRozen" data-labels="size/M,lifecycle/stale,Automatic AI generated">
                                 <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/15337" class="pr-link" target="_blank">#15337</a></td>
-                                <td>
-                                    [z-stream 4.18.1] Enable 30 tests for validation
-                                    
-                                    
-                                </td>
-                                <td>shyRozen</td>
-                                <td>brown</td>
-                                <td>
-                                    <span class="badge waiting-reviewer" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
-                                        NEEDS REVIEW
-                                    </span>
-                                </td>
-                                <td>
-                                    <span class="age-indicator age-old">
-                                        96d
-                                    </span>
-                                </td>
-                                <td><span class="badge size-xs">XS</span></td>
-                            </tr>
-                            
-                            <tr data-status="waiting_reviewer" data-squad="brown" data-size="XS" data-stale="false" data-draft="false" data-author="shyRozen" data-labels="size/M,lifecycle/stale,Automatic AI generated">
-                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/15331" class="pr-link" target="_blank">#15331</a></td>
                                 <td>
                                     [z-stream 4.18.1] Enable 30 tests for validation
                                     
@@ -3799,12 +3799,12 @@
                                 <td><span class="badge size-xl">XL</span></td>
                             </tr>
                             
-                            <tr data-status="waiting_reviewer" data-squad="general" data-size="XS" data-stale="true" data-draft="false" data-author="vavuthu" data-labels="size/M">
+                            <tr data-status="waiting_reviewer" data-squad="general" data-size="XS" data-stale="false" data-draft="false" data-author="vavuthu" data-labels="size/M,lifecycle/stale">
                                 <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/15429" class="pr-link" target="_blank">#15429</a></td>
                                 <td>
                                     [DNM]: [release-4.21]: skip vsphere prechecks
                                     
-                                    <span class="badge stale">STALE</span>
+                                    
                                 </td>
                                 <td>vavuthu</td>
                                 <td>general</td>
@@ -3821,12 +3821,12 @@
                                 <td><span class="badge size-xs">XS</span></td>
                             </tr>
                             
-                            <tr data-status="waiting_reviewer" data-squad="general" data-size="XS" data-stale="true" data-draft="false" data-author="vavuthu" data-labels="size/M">
+                            <tr data-status="waiting_reviewer" data-squad="general" data-size="XS" data-stale="false" data-draft="false" data-author="vavuthu" data-labels="size/M,lifecycle/stale">
                                 <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/15428" class="pr-link" target="_blank">#15428</a></td>
                                 <td>
                                     [DNM]: [release-4.18]: skip vsphere prechecks
                                     
-                                    <span class="badge stale">STALE</span>
+                                    
                                 </td>
                                 <td>vavuthu</td>
                                 <td>general</td>
@@ -3843,12 +3843,12 @@
                                 <td><span class="badge size-xs">XS</span></td>
                             </tr>
                             
-                            <tr data-status="waiting_reviewer" data-squad="general" data-size="XS" data-stale="true" data-draft="false" data-author="vavuthu" data-labels="size/M">
+                            <tr data-status="waiting_reviewer" data-squad="general" data-size="XS" data-stale="false" data-draft="false" data-author="vavuthu" data-labels="size/M,lifecycle/stale">
                                 <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/15427" class="pr-link" target="_blank">#15427</a></td>
                                 <td>
                                     [DNM]: [release-4.14]: skip vsphere prechecks
                                     
-                                    <span class="badge stale">STALE</span>
+                                    
                                 </td>
                                 <td>vavuthu</td>
                                 <td>general</td>
@@ -4525,6 +4525,28 @@
                                 <td><span class="badge size-xs">XS</span></td>
                             </tr>
                             
+                            <tr data-status="approved" data-squad="general" data-size="M" data-stale="true" data-draft="false" data-author="petr-balogh" data-labels="team/ecosystem,size/L,lgtm,cherry-pick">
+                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/15798" class="pr-link" target="_blank">#15798</a></td>
+                                <td>
+                                    Cherry pick release 4.18 for multi platform deployment
+                                    
+                                    <span class="badge stale">STALE</span>
+                                </td>
+                                <td>petr-balogh</td>
+                                <td>general</td>
+                                <td>
+                                    <span class="badge approved" title="Approved 🟢 - PR has been approved by one or more reviewers. Ready to merge. Action: Merge when ready">
+                                        APPROVED
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="age-indicator age-old">
+                                        53d
+                                    </span>
+                                </td>
+                                <td><span class="badge size-m">M</span></td>
+                            </tr>
+                            
                             <tr data-status="waiting_reviewer" data-squad="general" data-size="S" data-stale="true" data-draft="false" data-author="DanielOsypenko" data-labels="size/L">
                                 <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/15793" class="pr-link" target="_blank">#15793</a></td>
                                 <td>
@@ -4655,28 +4677,6 @@
                                     </span>
                                 </td>
                                 <td><span class="badge size-xs">XS</span></td>
-                            </tr>
-                            
-                            <tr data-status="approved" data-squad="general" data-size="M" data-stale="true" data-draft="false" data-author="petr-balogh" data-labels="team/ecosystem,size/L,lgtm,cherry-pick">
-                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/15798" class="pr-link" target="_blank">#15798</a></td>
-                                <td>
-                                    Cherry pick release 4.18 for multi platform deployment
-                                    
-                                    <span class="badge stale">STALE</span>
-                                </td>
-                                <td>petr-balogh</td>
-                                <td>general</td>
-                                <td>
-                                    <span class="badge approved" title="Approved 🟢 - PR has been approved by one or more reviewers. Ready to merge. Action: Merge when ready">
-                                        APPROVED
-                                    </span>
-                                </td>
-                                <td>
-                                    <span class="age-indicator age-old">
-                                        52d
-                                    </span>
-                                </td>
-                                <td><span class="badge size-m">M</span></td>
                             </tr>
                             
                             <tr data-status="approved" data-squad="general" data-size="XS" data-stale="true" data-draft="false" data-author="openshift-cherrypick-robot" data-labels="size/XS,lgtm">
@@ -5361,6 +5361,50 @@
                                 <td><span class="badge size-xs">XS</span></td>
                             </tr>
                             
+                            <tr data-status="waiting_reviewer" data-squad="general" data-size="S" data-stale="false" data-draft="false" data-author="clacroix12" data-labels="Needs Deployment Testing,team/ecosystem,size/L,cherry-pick">
+                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/16079" class="pr-link" target="_blank">#16079</a></td>
+                                <td>
+                                    [release-4.18] FDF 2AZ Arbiter support (#14118)
+                                    
+                                    
+                                </td>
+                                <td>clacroix12</td>
+                                <td>general</td>
+                                <td>
+                                    <span class="badge waiting-reviewer" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
+                                        NEEDS REVIEW
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="age-indicator age-old">
+                                        13d
+                                    </span>
+                                </td>
+                                <td><span class="badge size-s">S</span></td>
+                            </tr>
+                            
+                            <tr data-status="waiting_reviewer" data-squad="general" data-size="S" data-stale="false" data-draft="false" data-author="clacroix12" data-labels="Needs Deployment Testing,team/ecosystem,size/L,cherry-pick">
+                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/16078" class="pr-link" target="_blank">#16078</a></td>
+                                <td>
+                                    [release-4.19] FDF 2AZ Arbiter support (#14118)
+                                    
+                                    
+                                </td>
+                                <td>clacroix12</td>
+                                <td>general</td>
+                                <td>
+                                    <span class="badge waiting-reviewer" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
+                                        NEEDS REVIEW
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="age-indicator age-old">
+                                        13d
+                                    </span>
+                                </td>
+                                <td><span class="badge size-s">S</span></td>
+                            </tr>
+                            
                             <tr data-status="waiting_reviewer" data-squad="general" data-size="XS" data-stale="true" data-draft="false" data-author="yitzhak12" data-labels="team/ecosystem,size/XS,provider-client">
                                 <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/16077" class="pr-link" target="_blank">#16077</a></td>
                                 <td>
@@ -5435,50 +5479,6 @@
                                     <span class="badge stale">STALE</span>
                                 </td>
                                 <td>PrasadDesala</td>
-                                <td>general</td>
-                                <td>
-                                    <span class="badge waiting-reviewer" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
-                                        NEEDS REVIEW
-                                    </span>
-                                </td>
-                                <td>
-                                    <span class="age-indicator age-old">
-                                        12d
-                                    </span>
-                                </td>
-                                <td><span class="badge size-s">S</span></td>
-                            </tr>
-                            
-                            <tr data-status="waiting_reviewer" data-squad="general" data-size="S" data-stale="false" data-draft="false" data-author="clacroix12" data-labels="Needs Deployment Testing,team/ecosystem,size/L,cherry-pick">
-                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/16079" class="pr-link" target="_blank">#16079</a></td>
-                                <td>
-                                    [release-4.18] FDF 2AZ Arbiter support (#14118)
-                                    
-                                    
-                                </td>
-                                <td>clacroix12</td>
-                                <td>general</td>
-                                <td>
-                                    <span class="badge waiting-reviewer" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
-                                        NEEDS REVIEW
-                                    </span>
-                                </td>
-                                <td>
-                                    <span class="age-indicator age-old">
-                                        12d
-                                    </span>
-                                </td>
-                                <td><span class="badge size-s">S</span></td>
-                            </tr>
-                            
-                            <tr data-status="waiting_reviewer" data-squad="general" data-size="S" data-stale="false" data-draft="false" data-author="clacroix12" data-labels="Needs Deployment Testing,team/ecosystem,size/L,cherry-pick">
-                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/16078" class="pr-link" target="_blank">#16078</a></td>
-                                <td>
-                                    [release-4.19] FDF 2AZ Arbiter support (#14118)
-                                    
-                                    
-                                </td>
-                                <td>clacroix12</td>
                                 <td>general</td>
                                 <td>
                                     <span class="badge waiting-reviewer" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
@@ -7235,7 +7235,7 @@
                                 </td>
                                 <td>
                                     <span class="age-indicator age-old">
-                                        46d
+                                        47d
                                     </span>
                                 </td>
                                 <td><span class="badge size-m">M</span></td>
@@ -7545,7 +7545,7 @@
                                 </td>
                                 <td>
                                     <span class="age-indicator age-old">
-                                        333d
+                                        334d
                                     </span>
                                 </td>
                                 <td><span class="badge size-l">L</span></td>
@@ -7637,28 +7637,6 @@
                                     </span>
                                 </td>
                                 <td><span class="badge size-l">L</span></td>
-                            </tr>
-                            
-                            <tr data-status="waiting_reviewer" data-squad="turquoise" data-size="XS" data-stale="true" data-draft="false" data-author="shyRozen" data-labels="size/M,lifecycle/stale,Automatic AI generated">
-                                <td><a href="https://github.com/red-hat-storage/ocs-ci/pull/15168" class="pr-link" target="_blank">#15168</a></td>
-                                <td>
-                                    [z-stream 4.16.13] Enable 32 tests for validation
-                                    
-                                    <span class="badge stale">STALE</span>
-                                </td>
-                                <td>shyRozen</td>
-                                <td>turquoise</td>
-                                <td>
-                                    <span class="badge waiting-reviewer" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
-                                        NEEDS REVIEW
-                                    </span>
-                                </td>
-                                <td>
-                                    <span class="age-indicator age-old">
-                                        120d
-                                    </span>
-                                </td>
-                                <td><span class="badge size-xs">XS</span></td>
                             </tr>
                             
                             <tr data-status="waiting_reviewer" data-squad="turquoise" data-size="XS" data-stale="true" data-draft="false" data-author="keemano" data-labels="size/M,lifecycle/stale,needs-rebase,DR,Squad/Turquoise">
@@ -8251,7 +8229,7 @@
         
         // Initialize charts
         function initializeCharts() {
-            const analytics = {"age_distribution": {"colors": ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#991b1b", "#7f1d1d"], "data": [12, 45, 17, 19, 53, 188], "labels": ["0-2 days", "3-7 days", "8-14 days", "15-30 days", "30-60 days", "60+ days"]}, "status_distribution": {"colors": ["#f59e0b", "#ef4444", "#10b981"], "data": [255, 34, 45], "labels": ["Needs Review", "Needs Changes", "Approved"]}, "volume_trend": {"data": [334], "labels": ["Week 1"]}};
+            const analytics = {"age_distribution": {"colors": ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#991b1b", "#7f1d1d"], "data": [12, 45, 17, 19, 53, 187], "labels": ["0-2 days", "3-7 days", "8-14 days", "15-30 days", "30-60 days", "60+ days"]}, "status_distribution": {"colors": ["#f59e0b", "#ef4444", "#10b981"], "data": [254, 34, 45], "labels": ["Needs Review", "Needs Changes", "Approved"]}, "volume_trend": {"data": [333], "labels": ["Week 1"]}};
             
             // PR Volume Trend Chart
             if (analytics.volume_trend && analytics.volume_trend.data.length > 0) {
