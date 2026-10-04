@@ -2515,9 +2515,24 @@ def add_analytics_data(pr_data):
 
 def main():
     """Main function"""
-    # Get environment variables
-    token = os.environ.get('GITHUB_TOKEN', '').strip()
-    repo_name = os.environ.get('REPO_NAME', '').strip()
+    # Get environment variables and clean them aggressively
+    token = os.environ.get('GITHUB_TOKEN', '')
+    repo_name = os.environ.get('REPO_NAME', '')
+
+    # Remove ALL whitespace characters (spaces, tabs, newlines, etc.)
+    token = ''.join(token.split())
+    repo_name = repo_name.strip()
+
+    # Check if user accidentally included "token" prefix
+    if token.lower().startswith('token'):
+        token = token[5:].strip()  # Remove "token" prefix
+        print("Info: Removed 'token' prefix from GITHUB_TOKEN")
+
+    # Validate token format
+    if token and not token.startswith('ghp_') and not token.startswith('github_pat_'):
+        print(f"Warning: Token doesn't look like a valid GitHub token")
+        print(f"Expected format: ghp_xxxx or github_pat_xxxx")
+        print(f"Got: {token[:15]}... (length: {len(token)})")
 
     if not token or not repo_name:
         print("Error: GITHUB_TOKEN and REPO_NAME environment variables required")
