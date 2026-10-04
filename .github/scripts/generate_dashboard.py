@@ -2516,9 +2516,9 @@ def add_analytics_data(pr_data):
 def main():
     """Main function"""
     # Get environment variables
-    token = os.environ.get('GITHUB_TOKEN')
-    repo_name = os.environ.get('REPO_NAME')
-    
+    token = os.environ.get('GITHUB_TOKEN', '').strip()
+    repo_name = os.environ.get('REPO_NAME', '').strip()
+
     if not token or not repo_name:
         print("Error: GITHUB_TOKEN and REPO_NAME environment variables required")
         return
