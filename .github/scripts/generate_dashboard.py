@@ -1760,7 +1760,7 @@ def generate_html_dashboard(pr_data):
             const needsReview = teamPRs.filter(pr => pr.status === 'waiting_reviewer' && pr.reviewers.length === 0);
 
             document.getElementById('workloadDataSection').style.display = 'block';
-            renderWorkloadView(members, teamPRs, needsReview);
+            renderWorkloadView(members, teamPRs, needsReview, allPRs);
             renderAssignments(members, needsReview);
 
             const filterDesc = filters.length > 0 ? ` matching "${filters.join(', ')}"` : '';
@@ -1774,7 +1774,7 @@ def generate_html_dashboard(pr_data):
             }
         }
 
-        function renderWorkloadView(members, teamPRs, needsReview) {
+        function renderWorkloadView(members, teamPRs, needsReview, allPRs) {
             const profiles = members.map(m => {
                 const p = findProfile(m);
                 return p ? {...p} : {login: m, open_reviews: 0, total_reviews: 0, squad_expertise: {}, open_pr_numbers: []};
@@ -1835,37 +1835,62 @@ def generate_html_dashboard(pr_data):
 
             // Team table
             let tableHtml = '<table style="width:100%;border-collapse:collapse;font-size:0.9em;"><thead><tr style="background:#e5e7eb;">' +
-                '<th style="padding:8px;text-align:left;">Member</th>' +
-                '<th style="padding:8px;text-align:center;">Current Load</th>' +
-                '<th style="padding:8px;text-align:center;">Total Reviews</th>' +
-                '<th style="padding:8px;text-align:left;">Expertise</th>' +
-                '<th style="padding:8px;text-align:center;">Status</th></tr></thead><tbody>';
+                '<th style="padding:8px;text-align:left;">Team Member</th>' +
+                '<th style="padding:8px;text-align:center;">Workload Status</th>' +
+                '<th style="padding:8px;text-align:right;">Assigned PRs</th>' +
+                '<th style="padding:8px;text-align:right;">Reviewed PRs</th>' +
+                '<th style="padding:8px;text-align:right;">Pending</th>' +
+                '<th style="padding:8px;text-align:left;">Squad Experience</th></tr></thead><tbody>';
 
             profiles.forEach((p, idx) => {
                 const bgStyle = p.open_reviews === 0 ? 'background:#fef9ef;' : (p.open_reviews >= 8 ? 'background:#fef2f2;' : '');
+
                 // Sort squad experience by count (highest first)
                 const sortedExpertise = Object.entries(p.squad_expertise || {})
-                    .sort((a, b) => b[1] - a[1]); // Sort descending by count
+                    .sort((a, b) => b[1] - a[1]);
 
                 const expertiseHtml = sortedExpertise.map(([sq, cnt]) =>
                     `<span style="background:#e0e7ff;color:#3730a3;padding:1px 6px;border-radius:8px;font-size:0.8em;margin:1px;">${esc(sq)}:${cnt}</span>`
                 ).join(' ') || '<span style="color:#374151;font-size:0.85em;">🌱 Getting started</span>';
 
-                const prNums = p.open_pr_numbers || [];
-                let loadHtml;
-                if (prNums.length > 0) {
-                    const links = prNums.map(n => `<a href="https://github.com/red-hat-storage/ocs-ci/pull/${n}" target="_blank" style="color:#667eea;text-decoration:none;font-size:0.8em;">#${n}</a>`).join(', ');
-                    loadHtml = `<td style="padding:8px;text-align:center;"><span style="font-weight:bold;font-size:1.2em;">${p.open_reviews}</span><div style="margin-top:4px;">${links}</div></td>`;
+                // Assigned PRs (open_pr_numbers)
+                const assignedPRs = p.open_pr_numbers || [];
+                const assignedCount = assignedPRs.length;
+                let assignedHtml;
+                if (assignedCount <= 3) {
+                    const links = assignedPRs.map(n => `<a href="https://github.com/red-hat-storage/ocs-ci/pull/${n}" target="_blank" style="color:#667eea;text-decoration:none;font-size:0.8em;">#${n}</a>`).join(' ');
+                    assignedHtml = `<span style="font-weight:bold;">${assignedCount}</span> <span style="font-size:0.85em;">PRs</span>${links ? '<div style="margin-top:4px;">'+links+'</div>' : ''}`;
                 } else {
-                    loadHtml = `<td style="padding:8px;text-align:center;font-weight:bold;font-size:1.2em;">0</td>`;
+                    const firstTwo = assignedPRs.slice(0, 2);
+                    const remaining = assignedCount - 2;
+                    const links = firstTwo.map(n => `<a href="https://github.com/red-hat-storage/ocs-ci/pull/${n}" target="_blank" style="color:#667eea;text-decoration:none;font-size:0.8em;">#${n}</a>`).join(' ');
+                    const moreText = `<span style="color:#6b7280;cursor:help;" title="${assignedPRs.slice(2).map(n => '#'+n).join(', ')}">+${remaining} more</span>`;
+                    assignedHtml = `<span style="font-weight:bold;">${assignedCount}</span> <span style="font-size:0.85em;">PRs</span><div style="margin-top:4px;">${links} ${moreText}</div>`;
+                }
+
+                // Pending PRs - find PRs where this person was assigned but hasn't reviewed yet
+                const pendingPRs = allPRs.filter(pr => {
+                    const assigned = pr.open_pr_numbers?.includes(Number(pr.number)) || false;
+                    const reviewed = pr.actualReviewers?.includes(p.login) || false;
+                    return assigned && !reviewed;
+                });
+                const pendingCount = pendingPRs.length;
+                let pendingHtml;
+                if (pendingCount > 0) {
+                    const pendingLinks = pendingPRs.slice(0, 2).map(pr => `<a href="https://github.com/red-hat-storage/ocs-ci/pull/${pr.number}" target="_blank" style="color:#f59e0b;text-decoration:none;font-size:0.8em;">#${pr.number}</a>`).join(' ');
+                    const moreText = pendingCount > 2 ? ` <span style="color:#6b7280;">+${pendingCount-2} more</span>` : '';
+                    pendingHtml = `<span style="font-weight:bold;color:#f59e0b;">${pendingCount}</span> <span style="font-size:0.85em;">PRs</span><div style="margin-top:4px;">${pendingLinks}${moreText}</div>`;
+                } else {
+                    pendingHtml = `<span style="font-weight:bold;">0</span> <span style="font-size:0.85em;">PRs</span>`;
                 }
 
                 tableHtml += `<tr style="border-bottom:1px solid #e5e7eb;${bgStyle}">
-                    <td style="padding:8px;"><span role="img" aria-label="Load status: ${getStatusLabel(p.open_reviews)}" style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;background:${getLoadColor(p.open_reviews)};"></span><strong>${esc(p.login)}</strong></td>
-                    ${loadHtml}
-                    <td style="padding:8px;text-align:center;">${p.total_reviews}</td>
-                    <td style="padding:8px;">${expertiseHtml}</td>
-                    <td style="padding:8px;text-align:center;">${getStatusBadge(p.open_reviews)}</td></tr>`;
+                    <td style="padding:8px;"><strong>${esc(p.login)}</strong></td>
+                    <td style="padding:8px;text-align:center;">${getStatusBadge(p.open_reviews)}</td>
+                    <td style="padding:8px;text-align:right;">${assignedHtml}</td>
+                    <td style="padding:8px;text-align:right;"><span style="font-weight:bold;">${p.total_reviews}</span> <span style="font-size:0.85em;">PRs</span></td>
+                    <td style="padding:8px;text-align:right;">${pendingHtml}</td>
+                    <td style="padding:8px;">${expertiseHtml}</td></tr>`;
             });
             tableHtml += '</tbody></table>';
 
