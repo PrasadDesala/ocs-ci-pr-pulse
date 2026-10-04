@@ -6,10 +6,13 @@ Generates an interactive HTML dashboard showing PR status across squads
 
 import os
 import json
+import threading
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from github import Github, Auth
-from jinja2 import Template
+from jinja2 import Environment
+from markupsafe import Markup
 
 # Squad mapping from CODEOWNERS
 SQUAD_MAPPING = {
@@ -60,16 +63,16 @@ def get_pr_age_days(pr):
 
 
 def get_pr_status(pr):
-    """Determine if PR is waiting on reviewer or author"""
+    """Determine if PR is waiting on reviewer or author.
+    Returns (status, list_of_human_reviewer_logins).
+    """
     reviews = list(pr.get_reviews())
-    
+
     if not reviews:
-        return 'waiting_reviewer'
-    
-    # List of known bot usernames (without [bot] suffix)
+        return 'waiting_reviewer', []
+
     BOT_USERNAMES = ['ocs-ci', 'openshift-ci', 'dependabot', 'renovate']
-    
-    # Filter out bot reviews and author's own reviews
+
     human_reviews = [
         r for r in reviews
         if not (
@@ -79,38 +82,28 @@ def get_pr_status(pr):
         )
         and r.user.login != pr.user.login
     ]
-    
+
+    reviewer_logins = list(set(r.user.login for r in human_reviews))
+
     if not human_reviews:
-        return 'waiting_reviewer'
-    
-    # Get all reviews by type (excluding bots and author)
+        return 'waiting_reviewer', reviewer_logins
+
     changes_requested_reviews = [r for r in human_reviews if r.state == 'CHANGES_REQUESTED']
     approved_reviews = [r for r in human_reviews if r.state == 'APPROVED']
     commented_reviews = [r for r in human_reviews if r.state == 'COMMENTED']
-    
-    # Get commits for timestamp comparison
+
     commits = list(pr.get_commits())
     latest_commit = commits[-1] if commits else None
-    
-    # Priority 1: CHANGES_REQUESTED reviews
+
     if changes_requested_reviews:
         latest_change_request = changes_requested_reviews[-1]
-        
-        # Check if author has pushed commits after the latest change request
         if latest_commit and latest_commit.commit.author.date > latest_change_request.submitted_at:
-            return 'waiting_reviewer'
-        
-        # Otherwise, waiting on author to address the changes
-        return 'waiting_author'
-    
-    # Priority 2: COMMENTED reviews (reviewer left feedback without formal request)
+            return 'waiting_reviewer', reviewer_logins
+        return 'waiting_author', reviewer_logins
+
     elif commented_reviews:
         latest_comment_review = commented_reviews[-1]
-        
-        # Check if review has body text OR inline review comments from humans
         has_body = bool(latest_comment_review.body)
-        
-        # Check for human inline review comments (filter out bots)
         has_inline_comments = False
         if pr.review_comments > 0:
             review_comments = list(pr.get_review_comments())
@@ -123,21 +116,16 @@ def get_pr_status(pr):
                 )
             ]
             has_inline_comments = len(human_inline_comments) > 0
-        
+
         if has_body or has_inline_comments:
-            # If author pushed commits after the comment, waiting on reviewer
             if latest_commit and latest_commit.commit.author.date > latest_comment_review.submitted_at:
-                return 'waiting_reviewer'
-            
-            # Otherwise, author should address the comments
-            return 'waiting_author'
-    
-    # Priority 3: APPROVED reviews
+                return 'waiting_reviewer', reviewer_logins
+            return 'waiting_author', reviewer_logins
+
     if approved_reviews:
-        return 'approved'
-    
-    # Default: waiting on reviewer (no meaningful reviews yet)
-    return 'waiting_reviewer'
+        return 'approved', reviewer_logins
+
+    return 'waiting_reviewer', reviewer_logins
 
 
 def is_draft_or_wip(pr):
@@ -198,6 +186,72 @@ def get_pr_size(pr):
         return 'XL'
 
 
+DEFAULT_TEAM_MEMBERS = []
+
+
+def build_reviewer_profiles(pr_data):
+    """Build reviewer profiles for ALL users who appear in PR reviews/assignments."""
+    profiles = {}
+
+    all_prs = [pr for prs in pr_data['by_squad'].values() for pr in prs]
+
+    all_authors = set()
+    for pr in all_prs:
+        all_authors.add(pr['author'])
+
+        # Track all reviewers involved with this open PR (requested OR already reviewed)
+        all_reviewers_on_pr = set(pr.get('reviewers', []) + pr.get('actual_reviewers', []))
+
+        for reviewer in all_reviewers_on_pr:
+            if reviewer not in profiles:
+                profiles[reviewer] = {
+                    'login': reviewer,
+                    'open_reviews': 0,
+                    'total_reviews': 0,
+                    'squad_expertise': defaultdict(int),
+                    'open_pr_numbers': [],
+                }
+            p = profiles[reviewer]
+            p['open_reviews'] += 1
+            p['open_pr_numbers'].append(pr['number'])
+            p['squad_expertise'][pr['squad']] += 1
+
+        # Also count total reviews submitted (for expertise weight)
+        for reviewer in pr.get('actual_reviewers', []):
+            if reviewer not in profiles:
+                profiles[reviewer] = {
+                    'login': reviewer,
+                    'open_reviews': 0,
+                    'total_reviews': 0,
+                    'squad_expertise': defaultdict(int),
+                    'open_pr_numbers': [],
+                }
+            profiles[reviewer]['total_reviews'] += 1
+
+    # Ensure all authors have a profile (even if they never reviewed anything)
+    for author in all_authors:
+        if author not in profiles:
+            profiles[author] = {
+                'login': author,
+                'open_reviews': 0,
+                'total_reviews': 0,
+                'squad_expertise': defaultdict(int),
+                'open_pr_numbers': [],
+            }
+
+    for login, profile in profiles.items():
+        if profile['open_pr_numbers']:
+            ages = [pr['age_days'] for pr in all_prs if pr['number'] in profile['open_pr_numbers']]
+            profile['avg_review_age'] = round(sum(ages) / len(ages), 1) if ages else 0
+
+    result = {}
+    for login, profile in profiles.items():
+        profile['squad_expertise'] = dict(profile['squad_expertise'])
+        result[login] = profile
+
+    return result
+
+
 def collect_pr_data(repo_name, token):
     """Collect all PR data from GitHub"""
     auth = Auth.Token(token)
@@ -216,6 +270,7 @@ def collect_pr_data(repo_name, token):
         'stale_prs': [],
         'draft_prs': [],
         'all_labels': set(),
+        'all_branches': set(),
         'summary': {
             'total_open': 0,
             'waiting_reviewer': 0,
@@ -228,23 +283,18 @@ def collect_pr_data(repo_name, token):
         'generated_at': datetime.now(timezone.utc).isoformat()
     }
     
-    total_age = 0
-    processed = 0
-    
-    for idx, pr in enumerate(open_prs, 1):
-        # Process ALL PRs including drafts
-        
-        processed += 1
-        if processed % 10 == 0 or processed == 1:
-            print(f"Processing PR {idx}/{total_prs} (#{pr.number})...")
-        
+    processed_count = [0]
+    lock = threading.Lock()
+
+    def process_single_pr(idx, pr):
         age_days = get_pr_age_days(pr)
-        status = get_pr_status(pr)
+        status, actual_reviewers = get_pr_status(pr)
         squad = determine_squad(pr, repo)
         stale = is_stale(pr)
         size = get_pr_size(pr)
-        is_draft = is_draft_or_wip(pr)
-        
+        draft = is_draft_or_wip(pr)
+        label_names = [l.name for l in pr.labels]
+
         pr_info = {
             'number': pr.number,
             'title': pr.title,
@@ -256,71 +306,92 @@ def collect_pr_data(repo_name, token):
             'status': status,
             'squad': squad,
             'is_stale': stale,
-            'is_draft': is_draft,
+            'is_draft': draft,
             'size': size,
             'additions': pr.additions,
             'deletions': pr.deletions,
             'reviewers': [r.login for r in pr.requested_reviewers],
-            'labels': [l.name for l in pr.labels],
+            'actual_reviewers': actual_reviewers,
+            'labels': label_names,
             'comments': pr.comments,
-            'review_comments': pr.review_comments
+            'review_comments': pr.review_comments,
+            'base_branch': pr.base.ref,
+            'is_verified': 'Verified' in label_names
         }
-        
-        # Collect all labels for filter dropdown
-        for label in pr.labels:
-            pr_data['all_labels'].add(label.name)
-        
-        # Add to squad bucket
-        pr_data['by_squad'][squad].append(pr_info)
-        
-        # Add to status bucket
-        pr_data['by_status'][status].append(pr_info)
-        
-        # Track stale PRs
-        if stale:
-            pr_data['stale_prs'].append(pr_info)
-        
-        # Track draft PRs (including WIP in title)
-        if is_draft:
-            pr_data['draft_prs'].append(pr_info)
-            pr_data['summary']['draft'] += 1
-        
-        # Update summary
-        pr_data['summary']['total_open'] += 1
-        pr_data['summary'][status] += 1
-        if stale:
-            pr_data['summary']['stale'] += 1
-        total_age += age_days
-    
-    # Calculate average age
+
+        with lock:
+            processed_count[0] += 1
+            if processed_count[0] % 10 == 0 or processed_count[0] == 1:
+                print(f"Processing PR {processed_count[0]}/{total_prs} (#{pr.number})...")
+
+        return pr_info
+
+    print(f"Processing PRs with 4 threads...")
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = {
+            executor.submit(process_single_pr, idx, pr): pr
+            for idx, pr in enumerate(open_prs, 1)
+        }
+        for future in as_completed(futures):
+            pr_info = future.result()
+
+            for label in pr_info['labels']:
+                pr_data['all_labels'].add(label)
+            pr_data['all_branches'].add(pr_info['base_branch'])
+
+            pr_data['by_squad'][pr_info['squad']].append(pr_info)
+            pr_data['by_status'][pr_info['status']].append(pr_info)
+
+            if pr_info['is_stale']:
+                pr_data['stale_prs'].append(pr_info)
+            if pr_info['is_draft']:
+                pr_data['draft_prs'].append(pr_info)
+                pr_data['summary']['draft'] += 1
+
+            pr_data['summary']['total_open'] += 1
+            pr_data['summary'][pr_info['status']] += 1
+            if pr_info['is_stale']:
+                pr_data['summary']['stale'] += 1
+
+    total_age = sum(
+        pr['age_days']
+        for prs in pr_data['by_squad'].values()
+        for pr in prs
+    )
     if pr_data['summary']['total_open'] > 0:
         pr_data['summary']['avg_age_days'] = round(
             total_age / pr_data['summary']['total_open'], 1
         )
-    
-    # Convert labels set to sorted list
+
+    # Convert sets to sorted lists
     pr_data['all_labels'] = sorted(list(pr_data['all_labels']))
-    
-    print(f"\n✅ Processed {processed} PRs")
+    pr_data['all_branches'] = sorted(list(pr_data['all_branches']))
+
+    print(f"\n✅ Processed {processed_count[0]} PRs")
     print(f"   Total open: {pr_data['summary']['total_open']}")
     print(f"   Waiting reviewer: {pr_data['summary']['waiting_reviewer']}")
     print(f"   Waiting author: {pr_data['summary']['waiting_author']}")
     print(f"   Approved: {pr_data['summary']['approved']}")
     print(f"   Stale: {pr_data['summary']['stale']}")
     print(f"   Draft: {pr_data['summary']['draft']}")
-    
+
     return pr_data
 
 
 def generate_html_dashboard(pr_data):
     """Generate HTML dashboard from PR data"""
     
-    template = Template('''
+    def tojson_filter(value):
+        return Markup(json.dumps(value))
+    env = Environment(autoescape=True)
+    env.filters['tojson'] = tojson_filter
+    template = env.from_string('''
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'unsafe-inline'; connect-src https://api.github.com; img-src data:;">
     <title>OCS-CI PR Pulse</title>
     <style>
         * {
@@ -370,7 +441,7 @@ def generate_html_dashboard(pr_data):
         
         .summary-cards {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(6, 1fr);
             gap: 20px;
             padding: 30px;
             background: #f8f9fa;
@@ -420,7 +491,7 @@ def generate_html_dashboard(pr_data):
         }
         
         .card-label {
-            color: #666;
+            color: #4b5563;
             font-size: 0.9em;
             text-transform: uppercase;
             letter-spacing: 1px;
@@ -444,8 +515,28 @@ def generate_html_dashboard(pr_data):
         .card.draft { border-top: 4px solid #9ca3af; }
         .card.draft .card-value { color: #9ca3af; }
         
-        .card.age { border-top: 4px solid #8b5cf6; }
-        .card.age .card-value { color: #8b5cf6; }
+
+        .card:focus-visible {
+            outline: 2px solid #667eea;
+            outline-offset: 2px;
+        }
+
+        .pr-table th.sorted-asc::after { content: ' ▲'; }
+        .pr-table th.sorted-desc::after { content: ' ▼'; }
+
+        .filter-count {
+            display: inline-block;
+            background: white;
+            color: #667eea;
+            font-size: 0.75em;
+            font-weight: 700;
+            width: 18px;
+            height: 18px;
+            line-height: 18px;
+            border-radius: 50%;
+            text-align: center;
+            margin-left: 6px;
+        }
         
         .tabs {
             display: flex;
@@ -592,14 +683,45 @@ def generate_html_dashboard(pr_data):
         .badge.size-m { background: #fef3c7; color: #92400e; }
         .badge.size-l { background: #fed7aa; color: #9a3412; }
         .badge.size-xl { background: #fee2e2; color: #991b1b; }
+
+        .badge.verified { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+        .badge.release-branch { background: #ede9fe; color: #5b21b6; font-size: 0.75em; }
+        .badge.infrastructure { background: #f3f4f6; color: #4b5563; font-size: 0.75em; }
+
+        .suggested-reviewer {
+            display: inline-block;
+            background: #eff6ff;
+            color: #1e40af;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.8em;
+            margin: 1px;
+            border: 1px solid #bfdbfe;
+        }
+        .suggested-reviewer .score {
+            font-size: 0.75em;
+            color: #6b7280;
+            margin-left: 2px;
+        }
+        .load-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 4px;
+        }
+        .load-light { background: #10b981; }
+        .load-moderate { background: #3b82f6; }
+        .load-heavy { background: #f59e0b; }
+        .load-overloaded { background: #ef4444; }
         
         .age-indicator {
             font-weight: 500;
         }
         
-        .age-fresh { color: #10b981; }
-        .age-normal { color: #f59e0b; }
-        .age-old { color: #ef4444; }
+        .age-fresh { color: #059669; }
+        .age-normal { color: #b45309; }
+        .age-old { color: #dc2626; }
         
         .empty-state {
             text-align: center;
@@ -636,10 +758,11 @@ def generate_html_dashboard(pr_data):
         
         .filter-group select,
         .filter-group input {
-            padding: 8px 12px;
+            padding: 10px 12px;
             border: 1px solid #d1d5db;
             border-radius: 6px;
             font-size: 0.9em;
+            min-height: 44px;
         }
         
         /* Autocomplete styles */
@@ -668,13 +791,16 @@ def generate_html_dashboard(pr_data):
         }
         
         .autocomplete-item {
-            padding: 8px 12px;
+            padding: 12px 14px;
             cursor: pointer;
             border-bottom: 1px solid #f3f4f6;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
         }
-        
-        .autocomplete-item:hover {
-            background: #f3f4f6;
+
+        .autocomplete-item:hover, .autocomplete-item:focus {
+            background: #eff6ff;
         }
         
         .autocomplete-item:last-child {
@@ -695,6 +821,37 @@ def generate_html_dashboard(pr_data):
                 padding: 8px;
             }
         }
+        button:focus-visible {
+            outline: 2px solid #667eea;
+            outline-offset: 2px;
+        }
+
+        select:focus-visible, input:focus-visible {
+            outline: 2px solid #667eea;
+            outline-offset: 1px;
+        }
+
+        .skip-link {
+            position: absolute;
+            top: -100px;
+            left: 16px;
+            background: #1f2937;
+            color: white;
+            padding: 10px 18px;
+            border-radius: 0 0 6px 6px;
+            z-index: 10001;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .skip-link:focus {
+            top: 0;
+        }
+
+        .analytics-section {
+            margin: 20px 0 !important;
+        }
+
         @keyframes slideIn {
             from {
                 transform: translateX(400px);
@@ -717,8 +874,10 @@ def generate_html_dashboard(pr_data):
             }
         }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" integrity="sha384-e6nUZLBkQ86NJ6TVVKAeSaK8jWa3NhkYWZFomE39AvDbQWeie9PlQqM3pmYW5d1g" crossorigin="anonymous" defer></script>
 </head>
 <body>
+    <a href="#prTable" class="skip-link">Skip to PR Table</a>
     <div class="container">
         <div class="header">
             <h1>🔍 OCS-CI PR Pulse</h1>
@@ -727,40 +886,36 @@ def generate_html_dashboard(pr_data):
         </div>
         
         <div class="summary-cards">
-            <div class="card total" onclick="filterByCard('all')" title="Total number of open pull requests">
+            <div class="card total" role="button" tabindex="0" onclick="filterByCard('all')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterByCard('all')}" aria-label="Filter: show all {{ summary.total_open }} open PRs" title="Total number of open pull requests">
                 <div class="card-label">Total Open PRs</div>
                 <div class="card-value">{{ summary.total_open }}</div>
             </div>
-            <div class="card reviewer" onclick="filterByCard('waiting_reviewer')" title="Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review">
+            <div class="card reviewer" role="button" tabindex="0" onclick="filterByCard('waiting_reviewer')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterByCard('waiting_reviewer')}" aria-label="Filter: show {{ summary.waiting_reviewer }} PRs needing review" title="Needs Review - PR is ready for initial review OR author has addressed feedback. Action: Reviewers should review">
                 <div class="card-label">Needs Review</div>
                 <div class="card-value">{{ summary.waiting_reviewer }}</div>
             </div>
-            <div class="card author" onclick="filterByCard('waiting_author')" title="Needs Changes 🔴 - Reviewer requested changes OR left review comments (inline or body). Author hasn't pushed commits since review. Action: Author should address feedback">
+            <div class="card author" role="button" tabindex="0" onclick="filterByCard('waiting_author')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterByCard('waiting_author')}" aria-label="Filter: show {{ summary.waiting_author }} PRs needing changes" title="Needs Changes - Reviewer requested changes OR left review comments. Action: Author should address feedback">
                 <div class="card-label">Needs Changes</div>
                 <div class="card-value">{{ summary.waiting_author }}</div>
             </div>
-            <div class="card approved" onclick="filterByCard('approved')" title="Approved 🟢 - PR has been approved by one or more reviewers. Ready to merge. Action: Merge when ready">
+            <div class="card approved" role="button" tabindex="0" onclick="filterByCard('approved')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterByCard('approved')}" aria-label="Filter: show {{ summary.approved }} approved PRs" title="Approved - PR has been approved by one or more reviewers. Ready to merge">
                 <div class="card-label">Approved</div>
                 <div class="card-value">{{ summary.approved }}</div>
             </div>
-            <div class="card stale" onclick="filterByCard('stale')" title="PRs with no activity for more than 7 days">
+            <div class="card stale" role="button" tabindex="0" onclick="filterByCard('stale')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterByCard('stale')}" aria-label="Filter: show {{ summary.stale }} stale PRs" title="PRs with no activity for more than 7 days">
                 <div class="card-label">Stale (>7 days)</div>
                 <div class="card-value">{{ summary.stale }}</div>
             </div>
-            <div class="card draft" onclick="filterByCard('draft')" title="Draft or work-in-progress pull requests">
+            <div class="card draft" role="button" tabindex="0" onclick="filterByCard('draft')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterByCard('draft')}" aria-label="Filter: show {{ summary.draft }} draft PRs" title="Draft or work-in-progress pull requests">
                 <div class="card-label">Draft / WIP</div>
                 <div class="card-value">{{ summary.draft }}</div>
             </div>
-            <div class="card age" title="Average age of all open PRs in days">
-                <div class="card-label">Avg PR Age (days)</div>
-                <div class="card-value">{{ summary.avg_age_days }}</div>
-            </div>
         </div>
         <!-- Analytics Section -->
-        <div class="analytics-section" style="margin: 30px 0; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden;">
-            <div class="section-header" onclick="toggleAnalytics()" style="padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
-                <h2 style="margin: 0; font-size: 1.5em;">📈 Trends & Analytics</h2>
-                <button class="toggle-btn" id="analyticsToggle" style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 0.9em;">▼ Show Charts</button>
+        <div class="analytics-section" style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden;">
+            <div class="section-header" role="button" tabindex="0" onclick="toggleAnalytics()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleAnalytics()}" style="padding: 16px 20px; background: #1f2937; color: white; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="margin: 0; font-size: 1.2em; font-weight: 600;">📈 Trends & Analytics</h2>
+                <button class="toggle-btn" id="analyticsToggle" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 0.85em;">▼ Show Charts</button>
             </div>
             
             <div id="analyticsContent" class="analytics-content" style="display: none; padding: 30px;">
@@ -789,6 +944,77 @@ def generate_html_dashboard(pr_data):
         </div>
         
         
+        <!-- Reviewer Workload Section -->
+        <div class="analytics-section" style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden;">
+            <div class="section-header" role="button" tabindex="0" onclick="toggleWorkload()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleWorkload()}" style="padding: 16px 20px; background: #374151; color: white; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="margin: 0; font-size: 1.2em; font-weight: 600;">👥 Team Review Workload</h2>
+                <button class="toggle-btn" id="workloadToggle" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 0.85em;">▼ Show</button>
+            </div>
+
+            <div id="workloadContent" style="display: none; padding: 30px;">
+                <!-- Getting Started hint (hidden once team is configured) -->
+                <div id="onboardingHint" style="display: none; background: #fefce8; padding: 16px 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #fde68a; line-height: 1.6;">
+                    <span style="color: #713f12;">Enter your team's GitHub usernames below. Filter by squad/label. Click <em>Analyze &amp; Assign PRs</em> to see review distribution and get smart assignment suggestions.</span>
+                </div>
+                <!-- Team Configuration -->
+                <div style="background: #eff6ff; padding: 20px; border-radius: 8px; margin-bottom: 25px; border: 1px solid #bfdbfe;">
+                    <div style="font-weight: 700; color: #1e40af; margin-bottom: 12px; font-size: 1.1em;">Configure Your Team</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 12px;">
+                        <div class="autocomplete-wrapper">
+                            <label style="display: block; font-weight: 500; color: #374151; margin-bottom: 4px;">Team Members (GitHub usernames, comma-separated):</label>
+                            <input type="text" id="teamMembersInput" placeholder="e.g. user1, user2, user3" autocomplete="off" oninput="showUsernameSuggestions(); autoSaveTeamSettings()" style="width: 100%; padding: 10px 14px; border: 2px solid #bfdbfe; border-radius: 6px; font-size: 1em; min-height: 44px;">
+                            <div id="usernameSuggestions" class="autocomplete-suggestions"></div>
+                        </div>
+                        <div class="autocomplete-wrapper">
+                            <label style="display: block; font-weight: 500; color: #374151; margin-bottom: 4px;">Filter PRs by (comma-separated squads or labels):</label>
+                            <input type="text" id="teamFilterInput" placeholder="e.g. magenta, green OR team/e2e, team/ui" autocomplete="off" oninput="showFilterSuggestions(); autoSaveTeamSettings()" style="width: 100%; padding: 10px 14px; border: 2px solid #bfdbfe; border-radius: 6px; font-size: 1em; min-height: 44px;">
+                            <div id="filterSuggestions" class="autocomplete-suggestions"></div>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <button onclick="analyzeTeam()" style="padding: 10px 24px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.95em; font-weight: 600; min-height: 44px;">Analyze & Assign PRs</button>
+                        <button onclick="confirmClearSettings()" style="padding: 10px 16px; background: white; color: #6b7280; border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer; font-size: 0.9em; min-height: 44px;">Clear All</button>
+                    </div>
+                </div>
+
+                <!-- Dynamic Summary Cards -->
+                <div id="workloadSummaryCards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 15px; margin-bottom: 25px;"></div>
+
+                <div id="workloadDataSection" style="display: none;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 30px; margin-bottom: 30px;">
+                    <!-- Workload Distribution Chart -->
+                    <div style="background: #f8f9fa; padding: 25px; border-radius: 12px;">
+                        <h3 style="margin: 0 0 20px 0; color: #1f2937; font-size: 1.1em;">📊 Review Load by Member</h3>
+                        <canvas id="workloadChart" style="max-height: 350px;"></canvas>
+                    </div>
+
+                    <!-- Team Workload Table -->
+                    <div style="background: #f8f9fa; padding: 25px; border-radius: 12px;">
+                        <h3 style="margin: 0 0 20px 0; color: #1f2937; font-size: 1.1em;">📋 Team Workload</h3>
+                        <div id="workloadTableContainer"></div>
+                    </div>
+                </div>
+
+                <!-- PR Assignment List -->
+                <div id="assignmentSection" style="display: none;">
+                    <div style="background: #f0fdf4; padding: 20px; border-radius: 8px; border: 1px solid #bbf7d0; margin-bottom: 20px;">
+                        <h3 style="margin: 0 0 5px 0; color: #166534; font-size: 1.1em;">📝 Suggested PR Assignments</h3>
+                        <div style="color: #4b5563; font-size: 0.85em;">PRs needing review are distributed evenly. Uncheck to skip, use the dropdown to reassign. Click "Assign on GitHub" to apply.</div>
+                    </div>
+                    <!-- GitHub Token -->
+                    <div style="background: #fefce8; padding: 15px; border-radius: 8px; border: 1px solid #fde68a; margin-bottom: 20px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <label style="font-weight: 500; color: #854d0e; white-space: nowrap;">GitHub Token:</label>
+                        <input type="password" id="ghTokenInput" placeholder="ghp_..." style="flex: 1; min-width: 250px; padding: 8px 12px; border: 1px solid #fde68a; border-radius: 6px; font-size: 0.9em; font-family: monospace; min-height: 40px;">
+                        <button onclick="saveGHToken()" style="padding: 8px 16px; background: #ca8a04; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9em;">Save</button>
+                        <span id="tokenStatus" style="font-size: 0.8em; color: #6b7280;"></span>
+                        <div style="width: 100%; font-size: 0.8em; color: #92400e;">Token needs <code>repo</code> scope. Stored only in your browser's localStorage.</div>
+                    </div>
+                    <div id="assignmentList"></div>
+                </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Filters -->
         <div class="filters">
             <div class="filter-group">
@@ -824,13 +1050,30 @@ def generate_html_dashboard(pr_data):
                     <option value="XL">XL</option>
                 </select>
             </div>
+            <div class="filter-group">
+                <label>Branch:</label>
+                <select id="branchFilter" onchange="filterPRs()">
+                    <option value="">All Branches</option>
+                    {% for branch in all_branches %}
+                    <option value="{{ branch }}">{{ branch }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>PR Verification:</label>
+                <select id="verifiedFilter" onchange="filterPRs()">
+                    <option value="">All PRs</option>
+                    <option value="true">Verified</option>
+                    <option value="false">Unverified</option>
+                </select>
+            </div>
             <div class="filter-group autocomplete-wrapper">
                 <label>Label:</label>
                 <input type="text" id="labelFilter" placeholder="Type to search labels..." autocomplete="off" oninput="filterLabels()">
                 <div id="labelSuggestions" class="autocomplete-suggestions"></div>
             </div>
             <div class="filter-group">
-                <button onclick="resetFilters()" style="padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9em;">
+                <button id="clearFiltersBtn" onclick="resetFilters()" style="padding: 10px 16px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9em; min-height: 44px;">
                     Clear Filters
                 </button>
             </div>
@@ -846,27 +1089,30 @@ def generate_html_dashboard(pr_data):
                 <table class="pr-table" id="prTable">
                     <thead>
                         <tr>
-                            <th onclick="sortTable(0)" style="cursor: pointer;">PR #</th>
-                            <th onclick="sortTable(1)" style="cursor: pointer;">Title</th>
-                            <th onclick="sortTable(2)" style="cursor: pointer;">Author</th>
-                            <th onclick="sortTable(3)" style="cursor: pointer;">Squad</th>
-                            <th onclick="sortTable(4)" style="cursor: pointer;">Status</th>
-                            <th onclick="sortTable(5)" style="cursor: pointer;">Age</th>
-                            <th onclick="sortTable(6)" style="cursor: pointer;">Size</th>
+                            <th onclick="sortTable(0)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sortTable(0)}" tabindex="0" style="cursor: pointer;" aria-sort="none" role="columnheader">PR #</th>
+                            <th onclick="sortTable(1)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sortTable(1)}" tabindex="0" style="cursor: pointer;" aria-sort="none" role="columnheader">Title</th>
+                            <th onclick="sortTable(2)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sortTable(2)}" tabindex="0" style="cursor: pointer;" aria-sort="none" role="columnheader">Author</th>
+                            <th onclick="sortTable(3)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sortTable(3)}" tabindex="0" style="cursor: pointer;" aria-sort="none" role="columnheader">Squad</th>
+                            <th onclick="sortTable(4)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sortTable(4)}" tabindex="0" style="cursor: pointer;" aria-sort="none" role="columnheader">Branch</th>
+                            <th onclick="sortTable(5)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sortTable(5)}" tabindex="0" style="cursor: pointer;" aria-sort="none" role="columnheader">Status</th>
+                            <th onclick="sortTable(6)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sortTable(6)}" tabindex="0" style="cursor: pointer;" aria-sort="none" role="columnheader">Age</th>
+                            <th onclick="sortTable(7)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sortTable(7)}" tabindex="0" style="cursor: pointer;" aria-sort="none" role="columnheader">Size</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for squad, prs in by_squad.items()|sort %}
                             {% for pr in prs|sort(attribute='age_days', reverse=true) %}
-                            <tr data-status="{{ pr.status }}" data-squad="{{ pr.squad }}" data-size="{{ pr.size }}" data-stale="{{ pr.is_stale|lower }}" data-draft="{{ pr.is_draft|lower }}" data-author="{{ pr.author }}" data-labels="{{ pr.labels|join(',') }}">
+                            <tr data-status="{{ pr.status }}" data-squad="{{ pr.squad }}" data-size="{{ pr.size }}" data-stale="{{ pr.is_stale|lower }}" data-draft="{{ pr.is_draft|lower }}" data-author="{{ pr.author }}" data-labels="{{ pr.labels|join(',') }}" data-branch="{{ pr.base_branch }}" data-verified="{{ pr.is_verified|lower }}" data-reviewers="{{ pr.reviewers|join(',') }}" data-actual-reviewers="{{ pr.actual_reviewers|join(',') }}">
                                 <td><a href="{{ pr.url }}" class="pr-link" target="_blank">#{{ pr.number }}</a></td>
                                 <td>
                                     {{ pr.title }}
                                     {% if pr.is_draft %}<span class="badge draft">DRAFT</span>{% endif %}
                                     {% if pr.is_stale %}<span class="badge stale">STALE</span>{% endif %}
+                                    {% if pr.is_verified %}<span class="badge verified">VERIFIED</span>{% endif %}
                                 </td>
                                 <td>{{ pr.author }}</td>
                                 <td>{{ pr.squad }}</td>
+                                <td>{% if pr.base_branch != 'master' %}<span class="badge release-branch">{{ pr.base_branch }}</span>{% else %}master{% endif %}</td>
                                 <td>
                                     <span class="badge {{ pr.status|replace('_', '-') }}" title="{% if pr.status == 'waiting_reviewer' %}Needs Review 🟡 - PR is ready for initial review OR author has addressed feedback (pushed new commits). Action: Reviewers should review{% elif pr.status == 'waiting_author' %}Needs Changes 🔴 - Reviewer requested changes OR left review comments (inline or body). Author hasn't pushed commits since review. Action: Author should address feedback{% elif pr.status == 'approved' %}Approved 🟢 - PR has been approved by one or more reviewers. Ready to merge. Action: Merge when ready{% endif %}">
                                         {% if pr.status == 'waiting_reviewer' %}NEEDS REVIEW{% elif pr.status == 'waiting_author' %}NEEDS CHANGES{% elif pr.status == 'approved' %}APPROVED{% else %}{{ pr.status|replace('_', ' ')|upper }}{% endif %}
@@ -888,17 +1134,80 @@ def generate_html_dashboard(pr_data):
     </div>
     
     <script>
-        // Filter PRs based on current filter values
+        function esc(str) {
+            var d = document.createElement('div');
+            d.appendChild(document.createTextNode(str));
+            return d.innerHTML;
+        }
+
+        var storage = {
+            get: function(key) { try { return storage.get(key); } catch(e) { return null; } },
+            set: function(key, val) { try { storage.set(key, val); } catch(e) {} },
+            remove: function(key) { try { storage.remove(key); } catch(e) {} }
+        };
+        var sessionStore = {
+            get: function(key) { try { return sessionStore.get(key); } catch(e) { return null; } },
+            set: function(key, val) { try { sessionStore.set(key, val); } catch(e) {} },
+            remove: function(key) { try { sessionStore.remove(key); } catch(e) {} }
+        };
+
+        const FILTER_IDS = ['searchInput', 'squadFilter', 'statusFilter', 'sizeFilter', 'branchFilter', 'verifiedFilter', 'labelFilter'];
+
+        function getActiveFilterCount() {
+            let count = 0;
+            FILTER_IDS.forEach(id => {
+                const el = document.getElementById(id);
+                if (el && el.value && el.value.trim() !== '') count++;
+            });
+            return count;
+        }
+
+        function updateClearButton() {
+            const btn = document.getElementById('clearFiltersBtn');
+            const count = getActiveFilterCount();
+            if (count > 0) {
+                btn.innerHTML = 'Clear Filters <span class="filter-count">' + count + '</span>';
+            } else {
+                btn.textContent = 'Clear Filters';
+            }
+        }
+
+        function saveFiltersToSession() {
+            const state = {};
+            FILTER_IDS.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) state[id] = el.value;
+            });
+            sessionStore.set('prDashboardFilters', JSON.stringify(state));
+        }
+
+        function restoreFiltersFromSession() {
+            const saved = sessionStore.get('prDashboardFilters');
+            if (!saved) return false;
+            const state = JSON.parse(saved);
+            let hasFilters = false;
+            FILTER_IDS.forEach(id => {
+                const el = document.getElementById(id);
+                if (el && state[id]) {
+                    el.value = state[id];
+                    if (state[id].trim() !== '') hasFilters = true;
+                }
+            });
+            return hasFilters;
+        }
+
         function filterPRs() {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
             const squadFilter = document.getElementById('squadFilter').value.toLowerCase();
             const statusFilter = document.getElementById('statusFilter').value;
             const sizeFilter = document.getElementById('sizeFilter').value;
+            const branchFilter = document.getElementById('branchFilter').value;
+            const verifiedFilter = document.getElementById('verifiedFilter').value;
             const labelFilter = document.getElementById('labelFilter').value.toLowerCase().trim();
-            
+
             let visibleCount = 0;
             const rows = document.querySelectorAll('#prTable tbody tr');
-            
+
             rows.forEach(row => {
                 const prNumber = row.cells[0].textContent.toLowerCase().replace('#', '');
                 const prTitle = row.cells[1].textContent.toLowerCase();
@@ -906,14 +1215,12 @@ def generate_html_dashboard(pr_data):
                 const prSquad = row.dataset.squad.toLowerCase();
                 const prStatus = row.dataset.status;
                 const prSize = row.dataset.size;
-                const isStale = row.dataset.stale === 'true';
-                const isDraft = row.dataset.draft === 'true';
+                const prBranch = row.dataset.branch;
+                const prVerified = row.dataset.verified;
                 const prLabels = row.dataset.labels ? row.dataset.labels.toLowerCase() : '';
-                
+
                 let show = true;
-                
-                // Search filter (searches in PR#, title, and author)
-                // Remove # from search term for PR number matching
+
                 if (searchTerm) {
                     const cleanSearchTerm = searchTerm.replace('#', '');
                     if (!prNumber.includes(cleanSearchTerm) &&
@@ -922,33 +1229,20 @@ def generate_html_dashboard(pr_data):
                         show = false;
                     }
                 }
-                
-                // Squad filter
-                if (squadFilter && prSquad !== squadFilter) {
-                    show = false;
-                }
-                
-                // Status filter
-                if (statusFilter && prStatus !== statusFilter) {
-                    show = false;
-                }
-                
-                // Size filter
-                if (sizeFilter && prSize !== sizeFilter) {
-                    show = false;
-                }
-                
-                // Label filter - check if any label matches
-                if (labelFilter && !prLabels.includes(labelFilter)) {
-                    show = false;
-                }
-                
+                if (squadFilter && prSquad !== squadFilter) show = false;
+                if (statusFilter && prStatus !== statusFilter) show = false;
+                if (sizeFilter && prSize !== sizeFilter) show = false;
+                if (branchFilter && prBranch !== branchFilter) show = false;
+                if (verifiedFilter && prVerified !== verifiedFilter) show = false;
+                if (labelFilter && !prLabels.includes(labelFilter)) show = false;
+
                 row.style.display = show ? '' : 'none';
                 if (show) visibleCount++;
             });
-            
-            // Update visible count
+
             document.getElementById('visibleCount').textContent = visibleCount + ' PRs';
+            updateClearButton();
+            saveFiltersToSession();
         }
         
         // Filter by clicking summary cards
@@ -963,6 +1257,8 @@ def generate_html_dashboard(pr_data):
             document.getElementById('squadFilter').value = '';
             document.getElementById('statusFilter').value = '';
             document.getElementById('sizeFilter').value = '';
+            document.getElementById('branchFilter').value = '';
+            document.getElementById('verifiedFilter').value = '';
             
             // Apply filter based on card clicked
             if (filterType === 'all') {
@@ -1014,20 +1310,19 @@ def generate_html_dashboard(pr_data):
         
         // Reset all filters
         function resetFilters() {
-            document.getElementById('searchInput').value = '';
-            document.getElementById('squadFilter').value = '';
-            document.getElementById('statusFilter').value = '';
-            document.getElementById('sizeFilter').value = '';
-            document.getElementById('labelFilter').value = '';
+            FILTER_IDS.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            });
             document.getElementById('labelSuggestions').classList.remove('show');
-            
-            // Remove active class from all cards
+
             document.querySelectorAll('.card').forEach(card => {
                 card.classList.remove('active');
             });
             document.querySelector('.card.total').classList.add('active');
-            
+
             document.getElementById('tableTitle').textContent = 'All Open Pull Requests';
+            sessionStore.remove('prDashboardFilters');
             filterPRs();
         }
         
@@ -1058,7 +1353,7 @@ def generate_html_dashboard(pr_data):
             }
             
             suggestions.innerHTML = matches.map(label =>
-                `<div class="autocomplete-item" onclick="selectLabel('${label}')">${label}</div>`
+                `<div class="autocomplete-item" onclick="selectLabel('${esc(label)}')">${esc(label)}</div>`
             ).join('');
             suggestions.classList.add('show');
             
@@ -1083,40 +1378,59 @@ def generate_html_dashboard(pr_data):
         
         // Sort table by column
         let sortDirection = {};
+        let currentSortColumn = null;
         function sortTable(columnIndex) {
             const table = document.getElementById('prTable');
             const tbody = table.querySelector('tbody');
             const rows = Array.from(tbody.querySelectorAll('tr'));
-            
+            const headers = table.querySelectorAll('th');
+
             // Toggle sort direction
             sortDirection[columnIndex] = !sortDirection[columnIndex];
             const ascending = sortDirection[columnIndex];
-            
+
+            // Update header classes and aria-sort
+            headers.forEach((th, i) => {
+                th.classList.remove('sorted-asc', 'sorted-desc');
+                th.setAttribute('aria-sort', 'none');
+            });
+            headers[columnIndex].classList.add(ascending ? 'sorted-asc' : 'sorted-desc');
+            headers[columnIndex].setAttribute('aria-sort', ascending ? 'ascending' : 'descending');
+            currentSortColumn = columnIndex;
+
             rows.sort((a, b) => {
                 let aVal = a.cells[columnIndex].textContent.trim();
                 let bVal = b.cells[columnIndex].textContent.trim();
-                
-                // Handle numeric values (PR#, Age)
+
                 if (columnIndex === 0) {
                     aVal = parseInt(aVal.replace('#', ''));
                     bVal = parseInt(bVal.replace('#', ''));
-                } else if (columnIndex === 5) {
+                } else if (columnIndex === 6) {
                     aVal = parseInt(aVal.replace('d', ''));
                     bVal = parseInt(bVal.replace('d', ''));
                 }
-                
+
                 if (aVal < bVal) return ascending ? -1 : 1;
                 if (aVal > bVal) return ascending ? 1 : -1;
                 return 0;
             });
-            
-            // Re-append sorted rows
+
             rows.forEach(row => tbody.appendChild(row));
         }
         
-        // Initialize - show all PRs
+        // Initialize - restore filters and auto-expand sections with saved state
         window.onload = function() {
-            filterByCard('all');
+            if (restoreFiltersFromSession()) {
+                filterPRs();
+            } else {
+                filterByCard('all');
+            }
+            // Auto-open workload section if it was previously open OR if team is configured
+            const wasOpen = storage.get('prDashboardWorkloadOpen') === 'true';
+            const hasTeam = storage.get('prDashboardTeam');
+            if (wasOpen || hasTeam) {
+                toggleWorkload();
+            }
         };
         
         // Filter PRs by age range
@@ -1150,7 +1464,7 @@ def generate_html_dashboard(pr_data):
             const rows = document.querySelectorAll('#prTable tbody tr');
             
             rows.forEach(row => {
-                const ageText = row.cells[5].textContent.trim();
+                const ageText = row.cells[6].textContent.trim();
                 const age = parseInt(ageText.replace('d', ''));
                 
                 if (age >= minAge && age <= maxAge) {
@@ -1185,6 +1499,700 @@ def generate_html_dashboard(pr_data):
             }, 3000);
         }
         
+        // All reviewer profiles and PR data (built server-side)
+        const allReviewerProfiles = {{ reviewer_profiles|tojson }};
+        const defaultTeam = {{ default_team|tojson }};
+        const allUsernames = Object.keys(allReviewerProfiles).sort();
+        const allSquadNames = {{ by_squad.keys()|list|tojson }};
+        let workloadChartInstance = null;
+
+        // Get the current token being typed in a comma-separated input
+        function getCurrentToken(input) {
+            const val = input.value;
+            const cursor = input.selectionStart;
+            const before = val.substring(0, cursor);
+            const lastComma = before.lastIndexOf(',');
+            return before.substring(lastComma + 1).trim().toLowerCase();
+        }
+
+        // Replace the current token with the selected value
+        function replaceCurrentToken(input, value) {
+            const val = input.value;
+            const cursor = input.selectionStart;
+            const before = val.substring(0, cursor);
+            const after = val.substring(cursor);
+            const lastComma = before.lastIndexOf(',');
+            const prefix = lastComma >= 0 ? before.substring(0, lastComma + 1) + ' ' : '';
+            const afterComma = after.indexOf(',');
+            const suffix = afterComma >= 0 ? after.substring(afterComma) : '';
+            input.value = prefix + value + ', ' + suffix.replace(/^,\\s*/, '');
+            input.focus();
+        }
+
+        function showUsernameSuggestions() {
+            const input = document.getElementById('teamMembersInput');
+            const box = document.getElementById('usernameSuggestions');
+            const token = getCurrentToken(input);
+            if (!token) { box.classList.remove('show'); box.innerHTML = ''; return; }
+
+            const already = parseCommaSeparated(input.value);
+            const matches = allUsernames.filter(u =>
+                u.toLowerCase().includes(token) && !already.includes(u.toLowerCase())
+            ).slice(0, 10);
+
+            if (matches.length === 0) { box.classList.remove('show'); box.innerHTML = ''; return; }
+            box.innerHTML = matches.map(u =>
+                `<div class="autocomplete-item" onmousedown="selectUsername('${esc(u)}')">${esc(u)}</div>`
+            ).join('');
+            box.classList.add('show');
+        }
+
+        function selectUsername(username) {
+            const input = document.getElementById('teamMembersInput');
+            replaceCurrentToken(input, username);
+            document.getElementById('usernameSuggestions').classList.remove('show');
+        }
+
+        function showFilterSuggestions() {
+            const input = document.getElementById('teamFilterInput');
+            const box = document.getElementById('filterSuggestions');
+            const token = getCurrentToken(input);
+            if (!token) { box.classList.remove('show'); box.innerHTML = ''; return; }
+
+            const already = parseCommaSeparated(input.value);
+            const squadMatches = allSquadNames.filter(s =>
+                s.toLowerCase().includes(token) && !already.includes(s.toLowerCase())
+            );
+            const labelMatches = allLabels.filter(l =>
+                l.toLowerCase().includes(token) && !already.includes(l.toLowerCase())
+            ).slice(0, 8);
+
+            const results = [];
+            squadMatches.forEach(s => results.push({value: s, type: 'squad'}));
+            labelMatches.forEach(l => results.push({value: l, type: 'label'}));
+
+            if (results.length === 0) { box.classList.remove('show'); box.innerHTML = ''; return; }
+            box.innerHTML = results.map(r =>
+                `<div class="autocomplete-item" onmousedown="selectFilter('${esc(r.value)}')">` +
+                `<span style="background:${r.type === 'squad' ? '#e0e7ff;color:#3730a3' : '#fef3c7;color:#92400e'};padding:1px 6px;border-radius:8px;font-size:0.75em;margin-right:6px;">${esc(r.type)}</span>${esc(r.value)}</div>`
+            ).join('');
+            box.classList.add('show');
+        }
+
+        function selectFilter(value) {
+            const input = document.getElementById('teamFilterInput');
+            replaceCurrentToken(input, value);
+            document.getElementById('filterSuggestions').classList.remove('show');
+        }
+
+        // Close team suggestions when clicking outside
+        document.addEventListener('click', function(e) {
+            const targets = {
+                'usernameSuggestions': 'teamMembersInput',
+                'filterSuggestions': 'teamFilterInput'
+            };
+            Object.entries(targets).forEach(function(pair) {
+                const box = document.getElementById(pair[0]);
+                if (box && !box.contains(e.target) && e.target.id !== pair[1]) {
+                    box.classList.remove('show');
+                }
+            });
+        });
+
+        // Close all dropdowns on Escape
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                ['usernameSuggestions', 'filterSuggestions', 'labelSuggestions'].forEach(function(id) {
+                    var box = document.getElementById(id);
+                    if (box) box.classList.remove('show');
+                });
+            }
+        });
+
+        // Case-insensitive profile lookup
+        function findProfile(username) {
+            if (allReviewerProfiles[username]) return allReviewerProfiles[username];
+            const lower = username.toLowerCase();
+            for (const key of Object.keys(allReviewerProfiles)) {
+                if (key.toLowerCase() === lower) return allReviewerProfiles[key];
+            }
+            return null;
+        }
+
+        // Collect all PR data from table rows for client-side filtering
+        function getAllPRsFromTable() {
+            const rows = document.querySelectorAll('#prTable tbody tr');
+            const prs = [];
+            rows.forEach(row => {
+                prs.push({
+                    number: row.cells[0].textContent.trim().replace('#', ''),
+                    title: row.cells[1].textContent.trim().split('DRAFT')[0].split('STALE')[0].split('VERIFIED')[0].trim(),
+                    author: row.dataset.author,
+                    squad: row.dataset.squad,
+                    status: row.dataset.status,
+                    labels: row.dataset.labels ? row.dataset.labels.toLowerCase().split(',').filter(Boolean) : [],
+                    age: parseInt(row.cells[6].textContent.trim().replace('d', '')),
+                    url: row.cells[0].querySelector('a').href,
+                    reviewers: row.dataset.reviewers ? row.dataset.reviewers.split(',').filter(Boolean) : [],
+                    actualReviewers: row.dataset.actualReviewers ? row.dataset.actualReviewers.split(',').filter(Boolean) : [],
+                });
+            });
+            return prs;
+        }
+
+        function parseCommaSeparated(val) {
+            return val.split(',').map(s => s.trim()).filter(s => s.length > 0);
+        }
+
+        // Squad colors for visual variety
+        function getSquadColor(squad) {
+            const colors = {
+                magenta: '#ec4899',   // Pink
+                red: '#ef4444',       // Red
+                black: '#374151',     // Dark gray
+                blue: '#3b82f6',      // Blue
+                brown: '#92400e',     // Brown
+                purple: '#a855f7',    // Purple
+                green: '#10b981',     // Green
+                yellow: '#eab308',    // Yellow
+                general: '#6b7280',   // Gray
+                'team/e2e': '#0891b2' // Cyan
+            };
+            return colors[squad.toLowerCase()] || '#6b7280';
+        }
+
+        // Age color coding (for highlighting old PRs)
+        function getAgeStyle(age) {
+            if (age > 300) return 'color:#dc2626;font-weight:bold;'; // Ancient (red + bold)
+            if (age > 180) return 'color:#f59e0b;'; // Old (orange)
+            return 'color:#6b7280;'; // Normal (gray)
+        }
+
+        function getLoadColor(load) {
+            if (load === 0) return '#9ca3af';  // Gray - Idle
+            if (load >= 8) return '#ef4444';   // Red - Overloaded
+            if (load >= 5) return '#f59e0b';   // Orange - Heavy
+            return '#10b981';                   // Green - OK
+        }
+
+        function getStatusLabel(load) {
+            if (load === 0) return 'idle';
+            if (load >= 8) return 'overloaded';
+            if (load >= 5) return 'heavy';
+            return 'ok';
+        }
+
+        function getStatusBadge(load) {
+            if (load === 0) return '<span style="background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:8px;font-size:0.8em;">⚪ IDLE</span>';
+            if (load >= 8) return '<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:8px;font-size:0.8em;">🔴 OVERLOADED</span>';
+            if (load >= 5) return '<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:8px;font-size:0.8em;">🟡 HEAVY</span>';
+            return '<span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:8px;font-size:0.8em;">🟢 OK</span>';
+        }
+
+        function confirmClearSettings() {
+            if (confirm('Clear all saved settings (team members, filters, and GitHub token)?')) {
+                clearTeamSettings();
+            }
+        }
+
+        function clearTeamSettings() {
+            storage.remove('prDashboardTeam');
+            storage.remove('prDashboardTeamFilter');
+            storage.remove('prDashboardGHToken');
+            document.getElementById('teamMembersInput').value = '';
+            document.getElementById('teamFilterInput').value = '';
+            document.getElementById('ghTokenInput').value = '';
+            document.getElementById('workloadSummaryCards').innerHTML = '';
+            document.getElementById('workloadTableContainer').innerHTML = '';
+            document.getElementById('assignmentList').innerHTML = '';
+            document.getElementById('assignmentSection').style.display = 'none';
+            document.getElementById('workloadDataSection').style.display = 'none';
+            document.getElementById('onboardingHint').style.display = 'block';
+            if (workloadChartInstance) {
+                workloadChartInstance.destroy();
+                workloadChartInstance = null;
+            }
+            showNotification('All saved settings cleared');
+        }
+
+        function analyzeTeam() {
+            // Show loading state
+            showNotification('⏳ Analyzing team workload...', 30000);
+            const analyzeBtn = document.querySelector('button[onclick="analyzeTeam()"]');
+            if (analyzeBtn) {
+                analyzeBtn.disabled = true;
+                analyzeBtn.textContent = '⏳ Analyzing...';
+            }
+
+            const membersInput = document.getElementById('teamMembersInput').value.trim();
+            const filterInput = document.getElementById('teamFilterInput').value.trim();
+            const members = parseCommaSeparated(membersInput);
+
+            if (members.length === 0) {
+                if (analyzeBtn) {
+                    analyzeBtn.disabled = false;
+                    analyzeBtn.textContent = 'Analyze & Assign PRs';
+                }
+                showNotification('⚠️ Please enter at least one GitHub username');
+                return;
+            }
+
+            storage.set('prDashboardTeam', membersInput);
+            storage.set('prDashboardTeamFilter', filterInput);
+            var hint = document.getElementById('onboardingHint');
+            if (hint) hint.style.display = 'none';
+
+            const filters = parseCommaSeparated(filterInput);
+            const allPRs = getAllPRsFromTable();
+
+            // Filter PRs that match the team's squads or labels
+            let teamPRs;
+            if (filters.length === 0) {
+                teamPRs = allPRs;
+            } else {
+                teamPRs = allPRs.filter(pr => {
+                    const squadMatch = filters.some(f => pr.squad.toLowerCase() === f);
+                    const labelMatch = filters.some(f => pr.labels.some(l => l === f));
+                    return squadMatch || labelMatch;
+                });
+            }
+
+            const needsReview = teamPRs.filter(pr => pr.status === 'waiting_reviewer' && pr.reviewers.length === 0);
+
+            document.getElementById('workloadDataSection').style.display = 'block';
+            renderWorkloadView(members, teamPRs, needsReview);
+            renderAssignments(members, needsReview);
+
+            const filterDesc = filters.length > 0 ? ` matching "${filters.join(', ')}"` : '';
+            showNotification(`✓ Analysis complete! Found ${teamPRs.length} PRs${filterDesc}. ${needsReview.length} need review.`);
+
+            // Re-enable analyze button
+            const analyzeBtnEnd = document.querySelector('button[onclick="analyzeTeam()"]');
+            if (analyzeBtnEnd) {
+                analyzeBtnEnd.disabled = false;
+                analyzeBtnEnd.textContent = 'Analyze & Assign PRs';
+            }
+        }
+
+        function renderWorkloadView(members, teamPRs, needsReview) {
+            const profiles = members.map(m => {
+                const p = findProfile(m);
+                return p ? {...p} : {login: m, open_reviews: 0, total_reviews: 0, squad_expertise: {}, open_pr_numbers: []};
+            });
+            profiles.sort((a, b) => b.open_reviews - a.open_reviews);
+
+            const idle = profiles.filter(p => p.open_reviews === 0);
+            const active = profiles.filter(p => p.open_reviews > 0);
+            const overloaded = profiles.filter(p => p.open_reviews >= 8);
+            const loads = profiles.map(p => p.open_reviews);
+            const avgLoad = loads.length > 0 ? (loads.reduce((a,b) => a+b, 0) / loads.length).toFixed(1) : '0';
+
+            document.getElementById('workloadSummaryCards').innerHTML = `
+                <div style="background:#f0fdf4;padding:15px;border-radius:8px;text-align:center;border:1px solid #bbf7d0;">
+                    <div style="font-size:2em;font-weight:bold;color:#16a34a;">${members.length}</div>
+                    <div style="color:#166534;font-size:0.85em;">Team Members</div>
+                </div>
+                <div style="background:#eff6ff;padding:15px;border-radius:8px;text-align:center;border:1px solid #bfdbfe;">
+                    <div style="font-size:2em;font-weight:bold;color:#2563eb;">${teamPRs.length}</div>
+                    <div style="color:#1e40af;font-size:0.85em;">Team's PRs</div>
+                </div>
+                <div style="background:#fef3c7;padding:15px;border-radius:8px;text-align:center;border:1px solid #fde68a;">
+                    <div style="font-size:2em;font-weight:bold;color:#b45309;">${needsReview.length}</div>
+                    <div style="color:#92400e;font-size:0.85em;">Need Review</div>
+                </div>
+                <div style="background:#f3f4f6;padding:15px;border-radius:8px;text-align:center;border:1px solid #d1d5db;">
+                    <div style="font-size:2em;font-weight:bold;color:#6b7280;">${idle.length}</div>
+                    <div style="color:#4b5563;font-size:0.85em;">Idle Members</div>
+                    ${idle.length > 0 ? '<div style="margin-top:5px;font-size:0.8em;color:#6b7280;">' + idle.map(p=>esc(p.login)).join(', ') + '</div>' : ''}
+                </div>
+                <div style="background:#fefce8;padding:15px;border-radius:8px;text-align:center;border:1px solid #fde68a;">
+                    <div style="font-size:2em;font-weight:bold;color:#ca8a04;">${avgLoad}</div>
+                    <div style="color:#854d0e;font-size:0.85em;">Avg Load</div>
+                </div>
+                <div style="background:#fef2f2;padding:15px;border-radius:8px;text-align:center;border:1px solid #fecaca;">
+                    <div style="font-size:2em;font-weight:bold;color:#dc2626;">${overloaded.length}</div>
+                    <div style="color:#991b1b;font-size:0.85em;">Overloaded (8+)</div>
+                </div>
+            `;
+
+            // Adaptive table height: show all for small/medium teams, scroll only for large teams
+            const memberCount = profiles.length;
+            const container = document.getElementById('workloadTableContainer');
+
+            // Set container style based on team size
+            // Note: Row heights vary based on number of PRs shown, so fixed heights don't work well
+            if (memberCount <= 12) {
+                // Small/medium teams: show all members, no scroll
+                container.style.maxHeight = 'none';
+                container.style.overflowY = 'visible';
+                container.style.position = 'relative';
+            } else {
+                // Large teams (13+): limit height and scroll
+                container.style.maxHeight = '700px';
+                container.style.overflowY = 'auto';
+                container.style.position = 'relative';
+            }
+
+            // Team table
+            let tableHtml = '<table style="width:100%;border-collapse:collapse;font-size:0.9em;"><thead><tr style="background:#e5e7eb;">' +
+                '<th style="padding:8px;text-align:left;">Member</th>' +
+                '<th style="padding:8px;text-align:center;">Current Load</th>' +
+                '<th style="padding:8px;text-align:center;">Total Reviews</th>' +
+                '<th style="padding:8px;text-align:left;">Expertise</th>' +
+                '<th style="padding:8px;text-align:center;">Status</th></tr></thead><tbody>';
+
+            profiles.forEach((p, idx) => {
+                const bgStyle = p.open_reviews === 0 ? 'background:#fef9ef;' : (p.open_reviews >= 8 ? 'background:#fef2f2;' : '');
+                // Sort squad experience by count (highest first)
+                const sortedExpertise = Object.entries(p.squad_expertise || {})
+                    .sort((a, b) => b[1] - a[1]); // Sort descending by count
+
+                const expertiseHtml = sortedExpertise.map(([sq, cnt]) =>
+                    `<span style="background:#e0e7ff;color:#3730a3;padding:1px 6px;border-radius:8px;font-size:0.8em;margin:1px;">${esc(sq)}:${cnt}</span>`
+                ).join(' ') || '<span style="color:#374151;font-size:0.85em;">🌱 Getting started</span>';
+
+                const prNums = p.open_pr_numbers || [];
+                let loadHtml;
+                if (prNums.length > 0) {
+                    const links = prNums.map(n => `<a href="https://github.com/red-hat-storage/ocs-ci/pull/${n}" target="_blank" style="color:#667eea;text-decoration:none;font-size:0.8em;">#${n}</a>`).join(', ');
+                    loadHtml = `<td style="padding:8px;text-align:center;"><span style="font-weight:bold;font-size:1.2em;">${p.open_reviews}</span><div style="margin-top:4px;">${links}</div></td>`;
+                } else {
+                    loadHtml = `<td style="padding:8px;text-align:center;font-weight:bold;font-size:1.2em;">0</td>`;
+                }
+
+                tableHtml += `<tr style="border-bottom:1px solid #e5e7eb;${bgStyle}">
+                    <td style="padding:8px;"><span role="img" aria-label="Load status: ${getStatusLabel(p.open_reviews)}" style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;background:${getLoadColor(p.open_reviews)};"></span><strong>${esc(p.login)}</strong></td>
+                    ${loadHtml}
+                    <td style="padding:8px;text-align:center;">${p.total_reviews}</td>
+                    <td style="padding:8px;">${expertiseHtml}</td>
+                    <td style="padding:8px;text-align:center;">${getStatusBadge(p.open_reviews)}</td></tr>`;
+            });
+            tableHtml += '</tbody></table>';
+
+            // Add scroll indicator if team is very large
+            if (memberCount > 12) {
+                const visibleCount = 10; // Approximate rows visible in 700px
+                const hiddenCount = memberCount - visibleCount;
+                if (hiddenCount > 0) {
+                    tableHtml += `<div style="position:sticky;bottom:0;left:0;right:0;background:linear-gradient(to top, #f8f9fa 60%, transparent);padding:8px;text-align:center;font-size:0.8em;color:#6b7280;pointer-events:none;">
+                        ↓ Scroll for ${hiddenCount} more member${hiddenCount !== 1 ? 's' : ''} ↓
+                    </div>`;
+                }
+            }
+
+            container.innerHTML = tableHtml;
+
+            // Chart
+            if (typeof Chart === 'undefined') return;
+            if (workloadChartInstance) workloadChartInstance.destroy();
+            const ctx = document.getElementById('workloadChart').getContext('2d');
+            workloadChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: profiles.map(p => p.login),
+                    datasets: [{
+                        label: 'Current Load',
+                        data: profiles.map(p => p.open_reviews),
+                        backgroundColor: profiles.map(p => getLoadColor(p.open_reviews)),
+                        borderWidth: 0
+                    }, {
+                        label: 'Total Reviews',
+                        data: profiles.map(p => p.total_reviews),
+                        backgroundColor: 'rgba(102,126,234,0.2)',
+                        borderColor: '#667eea',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: true, indexAxis: 'y',
+                    plugins: { legend: { position: 'top' } },
+                    scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } }
+                }
+            });
+        }
+
+        // Global assignment state — tracks reassignments
+        let currentAssignments = {};
+        let currentMembers = [];
+
+        function renderAssignments(members, needsReview) {
+            const section = document.getElementById('assignmentSection');
+            const container = document.getElementById('assignmentList');
+            currentMembers = members;
+
+            if (needsReview.length === 0) {
+                section.style.display = 'block';
+                container.innerHTML = '<div style="text-align:center;padding:30px;color:#6b7280;">No unassigned PRs needing review for your team filters.</div>';
+                return;
+            }
+
+            // Build load map
+            const loadMap = {};
+            members.forEach(m => {
+                const p = findProfile(m);
+                loadMap[m] = p ? p.open_reviews : 0;
+            });
+
+            // Round-robin assign: lowest load gets next PR
+            currentAssignments = {};
+            needsReview.forEach((pr, idx) => {
+                const eligible = members.filter(m => m.toLowerCase() !== pr.author.toLowerCase());
+                if (eligible.length === 0) return;
+                eligible.sort((a, b) => loadMap[a] - loadMap[b]);
+                const assignee = eligible[0];
+                currentAssignments[idx] = {pr, assignee, included: true};
+                loadMap[assignee]++;
+            });
+
+            rebuildAssignmentUI(members, loadMap);
+            section.style.display = 'block';
+        }
+
+        function rebuildAssignmentUI(members, loadMap) {
+            const container = document.getElementById('assignmentList');
+
+            // Group by assignee
+            const grouped = {};
+            members.forEach(m => grouped[m] = []);
+            Object.entries(currentAssignments).forEach(([idx, item]) => {
+                if (!grouped[item.assignee]) grouped[item.assignee] = [];
+                grouped[item.assignee].push({...item, idx: parseInt(idx)});
+            });
+
+            // Recalculate load
+            if (!loadMap) {
+                loadMap = {};
+                members.forEach(m => {
+                    const p = findProfile(m);
+                    loadMap[m] = p ? p.open_reviews : 0;
+                });
+                Object.values(currentAssignments).forEach(item => {
+                    if (item.included) loadMap[item.assignee] = (loadMap[item.assignee] || 0) + 1;
+                });
+            }
+
+            const memberOptions = members.map(m => `<option value="${m}">${m}</option>`).join('');
+
+            let html = `<div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <button id="assignBtn" onclick="assignOnGitHub()" style="padding: 10px 20px; background: #16a34a; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; min-height: 44px;">🚀 Assign on GitHub</button>
+                <button onclick="copyAssignCommands()" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; min-height: 44px;">📋 Copy Commands</button>
+                <span id="copyStatus" style="color: #6b7280; font-size: 0.85em;"></span>
+            </div>
+            <div id="assignStatus" aria-live="polite" role="status" style="margin-bottom: 15px; line-height: 1.8;"></div>`;
+
+            members.forEach(m => {
+                const items = grouped[m] || [];
+                const includedCount = items.filter(i => i.included).length;
+                const totalLoad = (findProfile(m)?.open_reviews || 0) + includedCount;
+                const color = getLoadColor(totalLoad);
+
+                html += `<div style="margin-bottom: 20px; background: #f8f9fa; border-radius: 8px; overflow: hidden; border: 1px solid #e5e7eb;">
+                    <div style="padding: 12px 16px; background: white; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <span role="img" aria-label="Load status: ${getStatusLabel(totalLoad)}" style="display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;background:${color};"></span>
+                            <strong style="font-size: 1.1em;">${esc(m)}</strong>
+                            <span style="color:#6b7280;margin-left:8px;">${includedCount} PR${includedCount !== 1 ? 's' : ''} to review</span>
+                        </div>
+                        <span style="font-size:0.85em;color:#6b7280;">Final load: ${totalLoad} PRs</span>
+                    </div>`;
+
+                if (items.length === 0) {
+                    html += '<div style="padding:12px 16px;color:#10b981;font-size:0.9em;">✅ No new PRs assigned (already at capacity)</div>';
+                } else {
+                    html += '<table style="width:100%;border-collapse:collapse;font-size:0.9em;">';
+                    items.forEach(item => {
+                        const pr = item.pr;
+                        const checkedAttr = item.included ? 'checked' : '';
+                        const rowOpacity = item.included ? '1' : '0.4';
+
+                        // Get PR size
+                        const sizeLabel = pr.labels?.find(l => l.startsWith('size/'));
+                        const size = sizeLabel ? sizeLabel.replace('size/', '') : 'M';
+                        const sizeColors = { XS: '#10b981', S: '#3b82f6', M: '#f59e0b', L: '#ef4444', XL: '#dc2626' };
+                        const sizeColor = sizeColors[size] || '#6b7280';
+
+                        html += `<tr style="border-bottom:1px solid #e5e7eb;opacity:${rowOpacity};">
+                            <td style="padding:8px 8px 8px 16px;width:30px;"><input type="checkbox" ${checkedAttr} onchange="togglePR(${item.idx}, this.checked)" aria-label="Include PR #${pr.number} in assignment" style="width:18px;height:18px;cursor:pointer;"></td>
+                            <td style="padding:8px 4px;width:90px;">
+                                <a href="${pr.url}" target="_blank" style="color:#667eea;font-weight:500;text-decoration:none;">#${pr.number}</a>
+                                <span style="background:${sizeColor};color:white;padding:1px 4px;border-radius:3px;font-size:0.7em;margin-left:3px;font-weight:600;">${size}</span>
+                            </td>
+                            <td style="padding:8px 4px;" title="${esc(pr.title)}">${esc(pr.title.substring(0, 70))}${pr.title.length > 70 ? '...' : ''}</td>
+                            <td style="padding:8px;width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#6b7280;" title="${esc(pr.author)}">${esc(pr.author)}</td>
+                            <td style="padding:8px;width:80px;"><span style="background:${getSquadColor(pr.squad)};color:white;padding:2px 6px;border-radius:8px;font-size:0.8em;font-weight:500;">${esc(pr.squad)}</span></td>
+                            <td style="padding:8px;width:50px;${getAgeStyle(pr.age)}">${pr.age}d</td>
+                            <td style="padding:8px;width:150px;">
+                                <select onchange="reassignPR(${item.idx}, this.value)" style="padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:0.9em;cursor:pointer;width:140px;">
+                                    ${members.map(om => `<option value="${esc(om)}" ${om === item.assignee ? 'selected' : ''}>${esc(om)}</option>`).join('')}
+                                </select>
+                            </td>
+                        </tr>`;
+                    });
+                    html += '</table>';
+                }
+                html += '</div>';
+            });
+
+            container.innerHTML = html;
+        }
+
+        function togglePR(idx, included) {
+            currentAssignments[idx].included = included;
+            rebuildAssignmentUI(currentMembers);
+        }
+
+        function reassignPR(idx, newAssignee) {
+            currentAssignments[idx].assignee = newAssignee;
+            rebuildAssignmentUI(currentMembers);
+        }
+
+        function copyAssignCommands() {
+            const commands = [];
+            Object.values(currentAssignments).forEach(item => {
+                if (!item.included) return;
+                const p = findProfile(item.assignee);
+                const login = p ? p.login : item.assignee;
+                commands.push(`gh pr edit ${item.pr.number} --add-reviewer ${login}`);
+            });
+
+            if (commands.length === 0) {
+                document.getElementById('copyStatus').textContent = 'No PRs selected';
+                return;
+            }
+
+            const text = commands.join(String.fromCharCode(10));
+            navigator.clipboard.writeText(text).then(() => {
+                document.getElementById('copyStatus').textContent = `Copied ${commands.length} commands!`;
+                setTimeout(() => { document.getElementById('copyStatus').textContent = ''; }, 3000);
+            }).catch(() => {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:600px;height:300px;z-index:10001;padding:15px;font-family:monospace;font-size:0.9em;border:2px solid #667eea;border-radius:8px;';
+                const overlay = document.createElement('div');
+                overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;';
+                overlay.onclick = () => { overlay.remove(); ta.remove(); };
+                document.body.appendChild(overlay);
+                document.body.appendChild(ta);
+                ta.select();
+                document.getElementById('copyStatus').textContent = 'Select all and copy from the textbox';
+            });
+        }
+
+        function saveGHToken() {
+            const token = document.getElementById('ghTokenInput').value.trim();
+            if (!token) return;
+            storage.set('prDashboardGHToken', token);
+            document.getElementById('tokenStatus').textContent = 'Token saved!';
+            setTimeout(() => { document.getElementById('tokenStatus').textContent = ''; }, 2000);
+        }
+
+        function loadGHToken() {
+            const token = storage.get('prDashboardGHToken') || '';
+            document.getElementById('ghTokenInput').value = token;
+        }
+
+        async function assignOnGitHub() {
+            const token = document.getElementById('ghTokenInput').value.trim() || storage.get('prDashboardGHToken');
+            if (!token) {
+                showNotification('Please enter your GitHub token first');
+                return;
+            }
+            storage.set('prDashboardGHToken', token);
+
+            const selected = Object.values(currentAssignments).filter(item => item.included);
+            if (selected.length === 0) {
+                showNotification('No PRs selected');
+                return;
+            }
+
+            if (!confirm(`Assign reviewers to ${selected.length} PR${selected.length !== 1 ? 's' : ''} on GitHub?`)) {
+                return;
+            }
+
+            const btn = document.getElementById('assignBtn');
+            btn.disabled = true;
+            btn.textContent = 'Assigning...';
+            const statusEl = document.getElementById('assignStatus');
+            statusEl.innerHTML = '';
+
+            let success = 0;
+            let failed = 0;
+
+            for (const item of selected) {
+                const p = findProfile(item.assignee);
+                const login = p ? p.login : item.assignee;
+                try {
+                    const resp = await fetch(
+                        `https://api.github.com/repos/red-hat-storage/ocs-ci/pulls/${item.pr.number}/requested_reviewers`,
+                        {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Accept': 'application/vnd.github+json',
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({reviewers: [login]})
+                        }
+                    );
+                    if (resp.ok) {
+                        success++;
+                        statusEl.innerHTML += `<span style="color:#16a34a;font-size:0.85em;">&#10003; #${item.pr.number} → ${esc(login)}  </span>`;
+                    } else {
+                        const err = await resp.json();
+                        failed++;
+                        statusEl.innerHTML += `<span style="color:#dc2626;font-size:0.85em;">&#10007; #${item.pr.number}: ${esc(err.message || String(resp.status))}  </span>`;
+                    }
+                } catch (e) {
+                    failed++;
+                    statusEl.innerHTML += `<span style="color:#dc2626;font-size:0.85em;">&#10007; #${item.pr.number}: ${esc(e.message)}  </span>`;
+                }
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'Assign on GitHub';
+            var summary = `Assigned ${success} PR${success !== 1 ? 's' : ''}${failed > 0 ? `, ${failed} failed` : ''}`;
+            statusEl.setAttribute('aria-label', summary);
+            statusEl.setAttribute('tabindex', '-1');
+            statusEl.focus();
+            showNotification(summary);
+        }
+
+        // Auto-save team settings as user types
+        function autoSaveTeamSettings() {
+            const membersInput = document.getElementById('teamMembersInput').value.trim();
+            const filterInput = document.getElementById('teamFilterInput').value.trim();
+            storage.set('prDashboardTeam', membersInput);
+            storage.set('prDashboardTeamFilter', filterInput);
+        }
+
+        // Toggle workload section
+        function toggleWorkload() {
+            const content = document.getElementById('workloadContent');
+            const button = document.getElementById('workloadToggle');
+
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                button.textContent = '▲ Hide';
+                storage.set('prDashboardWorkloadOpen', 'true');
+                const savedTeam = storage.get('prDashboardTeam') || defaultTeam.join(', ');
+                const savedFilter = storage.get('prDashboardTeamFilter') || '';
+                document.getElementById('teamMembersInput').value = savedTeam;
+                document.getElementById('teamFilterInput').value = savedFilter;
+                loadGHToken();
+                var hint = document.getElementById('onboardingHint');
+                if (!savedTeam || savedTeam.trim() === '') {
+                    hint.style.display = 'block';
+                } else {
+                    hint.style.display = 'none';
+                    analyzeTeam();
+                }
+            } else {
+                content.style.display = 'none';
+                button.textContent = '▼ Show';
+                storage.set('prDashboardWorkloadOpen', 'false');
+            }
+        }
+
         // Toggle analytics section
         function toggleAnalytics() {
             const content = document.getElementById('analyticsContent');
@@ -1206,15 +2214,38 @@ def generate_html_dashboard(pr_data):
         
         // Initialize charts
         function initializeCharts() {
+            if (typeof Chart === 'undefined') {
+                document.getElementById('analyticsContent').innerHTML = '<div style="text-align:center;padding:40px;color:#6b7280;">Charts unavailable — Chart.js failed to load. Check your network connection and reload.</div>';
+                return;
+            }
             const analytics = {{ analytics|tojson }};
-            
+
+            // Add dates to week labels
+            function addDatesToWeekLabels(labels) {
+                const today = new Date();
+                return labels.map((label, index) => {
+                    const weeksAgo = labels.length - 1 - index;
+                    const endDate = new Date(today);
+                    endDate.setDate(today.getDate() - (weeksAgo * 7));
+                    const startDate = new Date(endDate);
+                    startDate.setDate(endDate.getDate() - 6);
+
+                    const formatDate = (date) => {
+                        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                        return `${months[date.getMonth()]} ${date.getDate()}`;
+                    };
+
+                    return `${label} (${formatDate(startDate)} - ${formatDate(endDate)})`;
+                });
+            }
+
             // PR Volume Trend Chart
             if (analytics.volume_trend && analytics.volume_trend.data.length > 0) {
                 const volumeCtx = document.getElementById('volumeChart').getContext('2d');
                 new Chart(volumeCtx, {
                     type: 'line',
                     data: {
-                        labels: analytics.volume_trend.labels,
+                        labels: addDatesToWeekLabels(analytics.volume_trend.labels),
                         datasets: [{
                             label: 'Open PRs',
                             data: analytics.volume_trend.data,
@@ -1334,14 +2365,32 @@ def generate_html_dashboard(pr_data):
             });
         }
         
-        // Auto-refresh every 5 minutes
-        setTimeout(() => {
-            location.reload();
-        }, 5 * 60 * 1000);
+        // Smart auto-refresh: only if user is idle and not actively working
+        let lastActivityTime = Date.now();
+
+        // Track user activity
+        ['click', 'keydown', 'input', 'change'].forEach(event => {
+            document.addEventListener(event, () => {
+                lastActivityTime = Date.now();
+            });
+        });
+
+        // Check every minute if we should refresh
+        setInterval(() => {
+            const idleMinutes = (Date.now() - lastActivityTime) / (60 * 1000);
+            const workloadOpen = document.getElementById('workloadContent')?.style.display !== 'none';
+            const hasUnsavedAssignments = Object.keys(currentAssignments || {}).length > 0;
+
+            // Only refresh if:
+            // - User has been idle for 3+ minutes
+            // - Workload section is closed OR no unsaved assignments
+            if (idleMinutes >= 3 && (!workloadOpen || !hasUnsavedAssignments)) {
+                saveFiltersToSession();
+                showNotification('Refreshing dashboard with latest PR data...');
+                setTimeout(() => location.reload(), 1000);
+            }
+        }, 60 * 1000); // Check every minute
     </script>
-    
-    <!-- Chart.js Library -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </body>
 </html>
     ''')
@@ -1355,8 +2404,11 @@ def generate_html_dashboard(pr_data):
         stale_prs=pr_data['stale_prs'],
         summary=pr_data['summary'],
         all_labels=pr_data['all_labels'],
+        all_branches=pr_data['all_branches'],
         generated_at=generated_at,
-        analytics=pr_data.get('analytics', {})
+        analytics=pr_data.get('analytics', {}),
+        reviewer_profiles=pr_data.get('reviewer_profiles', {}),
+        default_team=pr_data.get('default_team', [])
     )
     
     return html
@@ -1483,7 +2535,13 @@ def main():
     # Add analytics data
     print("\nAdding analytics data...")
     pr_data = add_analytics_data(pr_data)
-    
+
+    # Build reviewer profiles (all users — filtering happens client-side)
+    print("Building reviewer profiles...")
+    reviewer_profiles = build_reviewer_profiles(pr_data)
+    pr_data['reviewer_profiles'] = reviewer_profiles
+    pr_data['default_team'] = DEFAULT_TEAM_MEMBERS
+
     # Save JSON data
     print("Saving dashboard data...")
     os.makedirs('docs', exist_ok=True)
