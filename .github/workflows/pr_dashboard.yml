@@ -32,7 +32,7 @@ jobs:
       
       - name: Generate Dashboard Data
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PR_DASHBOARD_TOKEN }}
           REPO_NAME: red-hat-storage/ocs-ci
         run: |
           python .github/scripts/generate_dashboard.py
