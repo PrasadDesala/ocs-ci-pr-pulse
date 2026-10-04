@@ -1668,24 +1668,54 @@ def generate_html_dashboard(pr_data):
             return 'color:#6b7280;'; // Normal (gray)
         }
 
-        function getLoadColor(load) {
-            if (load === 0) return '#9ca3af';  // Gray - Idle
-            if (load >= 8) return '#ef4444';   // Red - Overloaded
-            if (load >= 5) return '#f59e0b';   // Orange - Heavy
-            return '#10b981';                   // Green - OK
+        // Get weighted size value for fair load distribution
+        function getSizeWeight(pr) {
+            const sizeLabel = pr.labels?.find(l => l.startsWith('size/'));
+            const size = sizeLabel ? sizeLabel.replace('size/', '') : 'M';
+            const weights = { XS: 0.5, S: 1, M: 2, L: 3, XL: 5 };
+            return weights[size] || 2;
         }
 
-        function getStatusLabel(load) {
+        // Calculate dynamic thresholds based on team average
+        function calculateThresholds(members) {
+            if (!members || members.length === 0) {
+                return { heavy: 5, overloaded: 8 }; // Fallback to defaults
+            }
+            const loads = members.map(m => {
+                const p = findProfile(m);
+                return p ? p.open_reviews : 0;
+            });
+            const avgLoad = loads.reduce((a, b) => a + b, 0) / loads.length;
+
+            // Dynamic: Heavy = 1.2x average, Overloaded = 1.5x average
+            // But use minimums to avoid edge cases with very small teams
+            return {
+                heavy: Math.max(5, Math.round(avgLoad * 1.2)),
+                overloaded: Math.max(8, Math.round(avgLoad * 1.5))
+            };
+        }
+
+        function getLoadColor(load, thresholds) {
+            if (load === 0) return '#9ca3af';  // Gray - Idle
+            const t = thresholds || { heavy: 5, overloaded: 8 };
+            if (load >= t.overloaded) return '#ef4444';   // Red - Overloaded
+            if (load >= t.heavy) return '#f59e0b';         // Orange - Heavy
+            return '#10b981';                               // Green - OK
+        }
+
+        function getStatusLabel(load, thresholds) {
             if (load === 0) return 'idle';
-            if (load >= 8) return 'overloaded';
-            if (load >= 5) return 'heavy';
+            const t = thresholds || { heavy: 5, overloaded: 8 };
+            if (load >= t.overloaded) return 'overloaded';
+            if (load >= t.heavy) return 'heavy';
             return 'ok';
         }
 
-        function getStatusBadge(load) {
+        function getStatusBadge(load, thresholds) {
             if (load === 0) return '<span style="background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:8px;font-size:0.8em;">⚪ IDLE</span>';
-            if (load >= 8) return '<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:8px;font-size:0.8em;">🔴 OVERLOADED</span>';
-            if (load >= 5) return '<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:8px;font-size:0.8em;">🟡 HEAVY</span>';
+            const t = thresholds || { heavy: 5, overloaded: 8 };
+            if (load >= t.overloaded) return '<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:8px;font-size:0.8em;">🔴 OVERLOADED</span>';
+            if (load >= t.heavy) return '<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:8px;font-size:0.8em;">🟡 HEAVY</span>';
             return '<span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:8px;font-size:0.8em;">🟢 OK</span>';
         }
 
@@ -1781,9 +1811,12 @@ def generate_html_dashboard(pr_data):
             });
             profiles.sort((a, b) => b.open_reviews - a.open_reviews);
 
+            // Calculate dynamic thresholds
+            const thresholds = calculateThresholds(members);
+
             const idle = profiles.filter(p => p.open_reviews === 0);
             const active = profiles.filter(p => p.open_reviews > 0);
-            const overloaded = profiles.filter(p => p.open_reviews >= 8);
+            const overloaded = profiles.filter(p => p.open_reviews >= thresholds.overloaded);
             const loads = profiles.map(p => p.open_reviews);
             const avgLoad = loads.length > 0 ? (loads.reduce((a,b) => a+b, 0) / loads.length).toFixed(1) : '0';
 
@@ -1811,7 +1844,7 @@ def generate_html_dashboard(pr_data):
                 </div>
                 <div style="background:#fef2f2;padding:15px;border-radius:8px;text-align:center;border:1px solid #fecaca;">
                     <div style="font-size:2em;font-weight:bold;color:#dc2626;">${overloaded.length}</div>
-                    <div style="color:#991b1b;font-size:0.85em;">Overloaded (8+)</div>
+                    <div style="color:#991b1b;font-size:0.85em;">Overloaded (${thresholds.overloaded}+)</div>
                 </div>
             `;
 
@@ -1886,7 +1919,7 @@ def generate_html_dashboard(pr_data):
 
                 tableHtml += `<tr style="border-bottom:1px solid #e5e7eb;${bgStyle}">
                     <td style="padding:8px;"><strong>${esc(p.login)}</strong></td>
-                    <td style="padding:8px;text-align:center;">${getStatusBadge(p.open_reviews)}</td>
+                    <td style="padding:8px;text-align:center;">${getStatusBadge(p.open_reviews, thresholds)}</td>
                     <td style="padding:8px;text-align:right;">${assignedHtml}</td>
                     <td style="padding:8px;text-align:right;"><span style="font-weight:bold;">${p.total_reviews}</span> <span style="font-size:0.85em;">PRs</span></td>
                     <td style="padding:8px;text-align:right;">${pendingHtml}</td>
@@ -1951,14 +1984,26 @@ def generate_html_dashboard(pr_data):
                 return;
             }
 
-            // Build load map
+            // Build weighted load map
             const loadMap = {};
             members.forEach(m => {
                 const p = findProfile(m);
-                loadMap[m] = p ? p.open_reviews : 0;
+                // Calculate weighted load based on PR sizes
+                if (p && p.open_pr_numbers && p.open_pr_numbers.length > 0) {
+                    let weightedLoad = 0;
+                    p.open_pr_numbers.forEach(prNum => {
+                        const pr = allPRs.find(pr => pr.number === prNum);
+                        if (pr) {
+                            weightedLoad += getSizeWeight(pr);
+                        }
+                    });
+                    loadMap[m] = weightedLoad;
+                } else {
+                    loadMap[m] = 0;
+                }
             });
 
-            // Round-robin assign: lowest load gets next PR
+            // Round-robin assign: lowest weighted load gets next PR
             currentAssignments = {};
             needsReview.forEach((pr, idx) => {
                 const eligible = members.filter(m => m.toLowerCase() !== pr.author.toLowerCase());
@@ -1966,7 +2011,7 @@ def generate_html_dashboard(pr_data):
                 eligible.sort((a, b) => loadMap[a] - loadMap[b]);
                 const assignee = eligible[0];
                 currentAssignments[idx] = {pr, assignee, included: true};
-                loadMap[assignee]++;
+                loadMap[assignee] += getSizeWeight(pr); // Add weighted size
             });
 
             rebuildAssignmentUI(members, loadMap);
@@ -1984,15 +2029,27 @@ def generate_html_dashboard(pr_data):
                 grouped[item.assignee].push({...item, idx: parseInt(idx)});
             });
 
-            // Recalculate load
+            // Recalculate weighted load
             if (!loadMap) {
                 loadMap = {};
                 members.forEach(m => {
                     const p = findProfile(m);
-                    loadMap[m] = p ? p.open_reviews : 0;
+                    // Calculate weighted load based on PR sizes
+                    if (p && p.open_pr_numbers && p.open_pr_numbers.length > 0) {
+                        let weightedLoad = 0;
+                        p.open_pr_numbers.forEach(prNum => {
+                            const pr = allPRs.find(pr => pr.number === prNum);
+                            if (pr) {
+                                weightedLoad += getSizeWeight(pr);
+                            }
+                        });
+                        loadMap[m] = weightedLoad;
+                    } else {
+                        loadMap[m] = 0;
+                    }
                 });
                 Object.values(currentAssignments).forEach(item => {
-                    if (item.included) loadMap[item.assignee] = (loadMap[item.assignee] || 0) + 1;
+                    if (item.included) loadMap[item.assignee] = (loadMap[item.assignee] || 0) + getSizeWeight(item.pr);
                 });
             }
 
