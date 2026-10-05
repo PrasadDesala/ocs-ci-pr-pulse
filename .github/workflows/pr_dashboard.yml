@@ -43,9 +43,28 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git fetch origin main
           git add docs/pr_dashboard.html docs/dashboard_data.json docs/dashboard_history.json
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Update PR dashboard [skip ci]" && git pull --rebase origin main && git push)
+
+          # Check if there are changes to commit
+          if git diff --staged --quiet; then
+            echo "No changes to dashboard files, skipping commit"
+            exit 0
+          fi
+
+          # Commit the changes
+          git commit -m "Update PR dashboard [skip ci]"
+
+          # Pull latest changes and rebase our commit on top
+          git fetch origin main
+          git rebase origin/main || {
+            echo "Rebase failed, trying reset strategy..."
+            git rebase --abort
+            git reset --soft origin/main
+            git commit -m "Update PR dashboard [skip ci]"
+          }
+
+          # Push with force-with-lease (safe force push)
+          git push --force-with-lease origin HEAD:main
 
   deploy:
     needs: generate-dashboard
