@@ -1904,14 +1904,16 @@ def generate_html_dashboard(pr_data):
                 }
 
                 // Pending PRs - find PRs where this person is assigned but hasn't reviewed yet
-                const pendingPRs = allPRs.filter(pr => {
-                    // Check if this PR is assigned to this person (PR number is in their open_pr_numbers)
-                    const isAssigned = (p.open_pr_numbers || []).includes(pr.number);
-                    // Check if this person has already reviewed it
-                    const hasReviewed = (pr.actualReviewers || []).includes(p.login);
-                    // Pending = assigned but not reviewed
-                    return isAssigned && !hasReviewed;
-                });
+                // Go through each assigned PR number and find the PR, then check if reviewed
+                const assignedPRNumbers = p.open_pr_numbers || [];
+                const pendingPRs = assignedPRNumbers
+                    .map(prNum => allPRs.find(pr => pr.number === prNum))
+                    .filter(pr => {
+                        if (!pr) return false; // PR not found in allPRs
+                        // Check if this person has reviewed it
+                        const hasReviewed = (pr.actualReviewers || []).includes(p.login);
+                        return !hasReviewed; // Pending if not reviewed
+                    });
                 const pendingCount = pendingPRs.length;
                 const pendingRowId = `pending-${p.login.replace(/[^a-zA-Z0-9]/g, '')}`;
                 let pendingHtml;
