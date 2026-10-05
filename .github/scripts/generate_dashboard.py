@@ -1906,14 +1906,36 @@ def generate_html_dashboard(pr_data):
                 // Pending PRs - find PRs where this person is assigned but hasn't reviewed yet
                 // Go through each assigned PR number and find the PR, then check if reviewed
                 const assignedPRNumbers = p.open_pr_numbers || [];
+
+                // Debug logging for first user only
+                if (idx === 0) {
+                    console.log('DEBUG Pending PRs for', p.login);
+                    console.log('  Assigned PR numbers:', assignedPRNumbers);
+                    console.log('  Total allPRs available:', allPRs.length);
+                }
+
                 const pendingPRs = assignedPRNumbers
-                    .map(prNum => allPRs.find(pr => pr.number === prNum))
+                    .map(prNum => {
+                        const found = allPRs.find(pr => pr.number === prNum);
+                        if (idx === 0 && !found) {
+                            console.log('  PR', prNum, 'not found in allPRs');
+                        }
+                        return found;
+                    })
                     .filter(pr => {
                         if (!pr) return false; // PR not found in allPRs
                         // Check if this person has reviewed it
                         const hasReviewed = (pr.actualReviewers || []).includes(p.login);
+                        if (idx === 0) {
+                            console.log('  PR', pr.number, 'actualReviewers:', pr.actualReviewers, 'hasReviewed:', hasReviewed);
+                        }
                         return !hasReviewed; // Pending if not reviewed
                     });
+
+                if (idx === 0) {
+                    console.log('  Final pending count:', pendingPRs.length);
+                    console.log('  Pending PRs:', pendingPRs.map(pr => pr.number));
+                }
                 const pendingCount = pendingPRs.length;
                 const pendingRowId = `pending-${p.login.replace(/[^a-zA-Z0-9]/g, '')}`;
                 let pendingHtml;
