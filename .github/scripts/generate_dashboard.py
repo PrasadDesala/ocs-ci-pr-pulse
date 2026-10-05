@@ -7,6 +7,7 @@ Generates an interactive HTML dashboard showing PR status across squads
 import os
 import json
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -66,7 +67,12 @@ def get_pr_status(pr):
     """Determine if PR is waiting on reviewer or author.
     Returns (status, list_of_human_reviewer_logins).
     """
-    reviews = list(pr.get_reviews())
+    try:
+        reviews = list(pr.get_reviews())
+    except Exception as e:
+        # If we hit rate limits or other errors, return default status
+        print(f"  Warning: Could not fetch reviews for PR #{pr.number}: {e}")
+        return 'waiting_reviewer', []
 
     if not reviews:
         return 'waiting_reviewer', []
@@ -324,10 +330,13 @@ def collect_pr_data(repo_name, token):
             if processed_count[0] % 10 == 0 or processed_count[0] == 1:
                 print(f"Processing PR {processed_count[0]}/{total_prs} (#{pr.number})...")
 
+        # Small delay to avoid hitting GitHub's secondary rate limits
+        time.sleep(0.3)
+
         return pr_info
 
-    print(f"Processing PRs with 4 threads...")
-    with ThreadPoolExecutor(max_workers=4) as executor:
+    print(f"Processing PRs with 2 threads (to avoid rate limits)...")
+    with ThreadPoolExecutor(max_workers=2) as executor:
         futures = {
             executor.submit(process_single_pr, idx, pr): pr
             for idx, pr in enumerate(open_prs, 1)
