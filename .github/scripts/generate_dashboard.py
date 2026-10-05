@@ -1027,12 +1027,21 @@ def generate_html_dashboard(pr_data):
                         <div style="color: #4b5563; font-size: 0.85em;">PRs needing review are distributed evenly. Uncheck to skip, use the dropdown to reassign. Click "Assign on GitHub" to apply.</div>
                     </div>
                     <!-- GitHub Token -->
-                    <div style="background: #fefce8; padding: 15px; border-radius: 8px; border: 1px solid #fde68a; margin-bottom: 20px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                        <label style="font-weight: 500; color: #854d0e; white-space: nowrap;">GitHub Token:</label>
-                        <input type="password" id="ghTokenInput" placeholder="ghp_..." style="flex: 1; min-width: 250px; padding: 8px 12px; border: 1px solid #fde68a; border-radius: 6px; font-size: 0.9em; font-family: monospace; min-height: 40px;">
-                        <button onclick="saveGHToken()" style="padding: 8px 16px; background: #ca8a04; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9em;">Save</button>
-                        <span id="tokenStatus" style="font-size: 0.8em; color: #6b7280;"></span>
-                        <div style="width: 100%; font-size: 0.8em; color: #92400e;">Token needs <code>repo</code> scope. Stored only in your browser's localStorage.</div>
+                    <div style="background: #fefce8; padding: 15px; border-radius: 8px; border: 1px solid #fde68a; margin-bottom: 20px;">
+                        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px;">
+                            <label style="font-weight: 500; color: #854d0e; white-space: nowrap;">GitHub Token:</label>
+                            <input type="password" id="ghTokenInput" placeholder="ghp_..." style="flex: 1; min-width: 250px; padding: 8px 12px; border: 1px solid #fde68a; border-radius: 6px; font-size: 0.9em; font-family: monospace; min-height: 40px;">
+                            <button onclick="saveGHToken()" style="padding: 8px 16px; background: #ca8a04; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9em;">Save</button>
+                            <span id="tokenStatus" style="font-size: 0.8em; color: #6b7280;"></span>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+                            <input type="checkbox" id="rememberToken" onchange="toggleTokenStorage()" style="width: 16px; height: 16px; cursor: pointer;">
+                            <label for="rememberToken" style="font-size: 0.85em; color: #92400e; cursor: pointer;">Remember token (stores in browser localStorage)</label>
+                        </div>
+                        <div style="font-size: 0.8em; color: #92400e; line-height: 1.5;">
+                            Token needs <code>repo</code> scope.
+                            <span style="display: block; margin-top: 4px;">⚠️ Only enable "Remember" on personal computers. Token visible in DevTools (F12).</span>
+                        </div>
                     </div>
                     <div id="assignmentList"></div>
                 </div>
@@ -1165,15 +1174,55 @@ def generate_html_dashboard(pr_data):
             return d.innerHTML;
         }
 
+        // localStorage wrapper with error handling
         var storage = {
-            get: function(key) { try { return storage.get(key); } catch(e) { return null; } },
-            set: function(key, val) { try { storage.set(key, val); } catch(e) {} },
-            remove: function(key) { try { storage.remove(key); } catch(e) {} }
+            get: function(key) {
+                try {
+                    return localStorage.getItem(key);
+                } catch(e) {
+                    console.warn('localStorage not available:', e);
+                    return null;
+                }
+            },
+            set: function(key, val) {
+                try {
+                    localStorage.setItem(key, val);
+                } catch(e) {
+                    console.warn('localStorage not available:', e);
+                }
+            },
+            remove: function(key) {
+                try {
+                    localStorage.removeItem(key);
+                } catch(e) {
+                    console.warn('localStorage not available:', e);
+                }
+            }
         };
+        // sessionStorage wrapper (for temporary data)
         var sessionStore = {
-            get: function(key) { try { return sessionStore.get(key); } catch(e) { return null; } },
-            set: function(key, val) { try { sessionStore.set(key, val); } catch(e) {} },
-            remove: function(key) { try { sessionStore.remove(key); } catch(e) {} }
+            get: function(key) {
+                try {
+                    return sessionStorage.getItem(key);
+                } catch(e) {
+                    console.warn('sessionStorage not available:', e);
+                    return null;
+                }
+            },
+            set: function(key, val) {
+                try {
+                    sessionStorage.setItem(key, val);
+                } catch(e) {
+                    console.warn('sessionStorage not available:', e);
+                }
+            },
+            remove: function(key) {
+                try {
+                    sessionStorage.removeItem(key);
+                } catch(e) {
+                    console.warn('sessionStorage not available:', e);
+                }
+            }
         };
 
         const FILTER_IDS = ['searchInput', 'squadFilter', 'statusFilter', 'sizeFilter', 'branchFilter', 'verifiedFilter', 'labelFilter'];
@@ -2227,24 +2276,70 @@ def generate_html_dashboard(pr_data):
 
         function saveGHToken() {
             const token = document.getElementById('ghTokenInput').value.trim();
-            if (!token) return;
-            storage.set('prDashboardGHToken', token);
-            document.getElementById('tokenStatus').textContent = 'Token saved!';
-            setTimeout(() => { document.getElementById('tokenStatus').textContent = ''; }, 2000);
+            const rememberChecked = document.getElementById('rememberToken').checked;
+
+            if (!token) {
+                document.getElementById('tokenStatus').textContent = 'Please enter a token';
+                document.getElementById('tokenStatus').style.color = '#dc2626';
+                setTimeout(() => { document.getElementById('tokenStatus').textContent = ''; }, 2000);
+                return;
+            }
+
+            if (rememberChecked) {
+                storage.set('prDashboardGHToken', token);
+                storage.set('prDashboardRememberToken', 'true');
+                document.getElementById('tokenStatus').textContent = '✓ Token saved in localStorage';
+            } else {
+                storage.remove('prDashboardGHToken');
+                storage.remove('prDashboardRememberToken');
+                document.getElementById('tokenStatus').textContent = '✓ Token set (not saved)';
+            }
+
+            document.getElementById('tokenStatus').style.color = '#16a34a';
+            setTimeout(() => { document.getElementById('tokenStatus').textContent = ''; }, 3000);
         }
 
         function loadGHToken() {
-            const token = storage.get('prDashboardGHToken') || '';
+            const rememberSetting = storage.get('prDashboardRememberToken') === 'true';
+            const token = rememberSetting ? (storage.get('prDashboardGHToken') || '') : '';
+
             document.getElementById('ghTokenInput').value = token;
+            document.getElementById('rememberToken').checked = rememberSetting;
+        }
+
+        function toggleTokenStorage() {
+            const rememberChecked = document.getElementById('rememberToken').checked;
+            const token = document.getElementById('ghTokenInput').value.trim();
+
+            if (!rememberChecked) {
+                // Unchecked - clear stored token
+                storage.remove('prDashboardGHToken');
+                storage.remove('prDashboardRememberToken');
+                document.getElementById('tokenStatus').textContent = '✓ Token storage cleared';
+                document.getElementById('tokenStatus').style.color = '#6b7280';
+                setTimeout(() => { document.getElementById('tokenStatus').textContent = ''; }, 2000);
+            } else if (token) {
+                // Checked and has token - save it
+                saveGHToken();
+            }
         }
 
         async function assignOnGitHub() {
-            const token = document.getElementById('ghTokenInput').value.trim() || storage.get('prDashboardGHToken');
+            const tokenInput = document.getElementById('ghTokenInput').value.trim();
+            const rememberChecked = document.getElementById('rememberToken').checked;
+            const storedToken = rememberChecked ? storage.get('prDashboardGHToken') : null;
+            const token = tokenInput || storedToken;
+
             if (!token) {
                 showNotification('Please enter your GitHub token first');
                 return;
             }
-            storage.set('prDashboardGHToken', token);
+
+            // Only save if remember is checked
+            if (rememberChecked && tokenInput) {
+                storage.set('prDashboardGHToken', tokenInput);
+                storage.set('prDashboardRememberToken', 'true');
+            }
 
             const selected = Object.values(currentAssignments).filter(item => item.included);
             if (selected.length === 0) {
