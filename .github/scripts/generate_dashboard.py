@@ -1791,7 +1791,7 @@ def generate_html_dashboard(pr_data):
 
             document.getElementById('workloadDataSection').style.display = 'block';
             renderWorkloadView(members, teamPRs, needsReview, allPRs);
-            renderAssignments(members, needsReview);
+            renderAssignments(members, needsReview, allPRs);
 
             const filterDesc = filters.length > 0 ? ` matching "${filters.join(', ')}"` : '';
             showNotification(`✓ Analysis complete! Found ${teamPRs.length} PRs${filterDesc}. ${needsReview.length} need review.`);
@@ -1986,11 +1986,13 @@ def generate_html_dashboard(pr_data):
         // Global assignment state — tracks reassignments
         let currentAssignments = {};
         let currentMembers = [];
+        let currentAllPRs = [];
 
-        function renderAssignments(members, needsReview) {
+        function renderAssignments(members, needsReview, allPRs) {
             const section = document.getElementById('assignmentSection');
             const container = document.getElementById('assignmentList');
             currentMembers = members;
+            currentAllPRs = allPRs;
 
             if (needsReview.length === 0) {
                 section.style.display = 'block';
@@ -2028,11 +2030,11 @@ def generate_html_dashboard(pr_data):
                 loadMap[assignee] += getSizeWeight(pr); // Add weighted size
             });
 
-            rebuildAssignmentUI(members, loadMap);
+            rebuildAssignmentUI(members, loadMap, allPRs);
             section.style.display = 'block';
         }
 
-        function rebuildAssignmentUI(members, loadMap) {
+        function rebuildAssignmentUI(members, loadMap, allPRs) {
             const container = document.getElementById('assignmentList');
 
             // Group by assignee
@@ -2134,12 +2136,12 @@ def generate_html_dashboard(pr_data):
 
         function togglePR(idx, included) {
             currentAssignments[idx].included = included;
-            rebuildAssignmentUI(currentMembers);
+            rebuildAssignmentUI(currentMembers, null, currentAllPRs);
         }
 
         function reassignPR(idx, newAssignee) {
             currentAssignments[idx].assignee = newAssignee;
-            rebuildAssignmentUI(currentMembers);
+            rebuildAssignmentUI(currentMembers, null, currentAllPRs);
         }
 
         function copyAssignCommands() {
