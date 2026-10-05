@@ -972,7 +972,7 @@ def generate_html_dashboard(pr_data):
         <!-- Reviewer Workload Section -->
         <div class="analytics-section" style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden;">
             <div class="section-header" role="button" tabindex="0" onclick="toggleWorkload()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleWorkload()}" style="padding: 16px 20px; background: #374151; color: white; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
-                <h2 style="margin: 0; font-size: 1.2em; font-weight: 600;">👥 Team Review Workload</h2>
+                <h2 style="margin: 0; font-size: 1.2em; font-weight: 600;">👥 Team Review Load</h2>
                 <button class="toggle-btn" id="workloadToggle" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 0.85em;">▼ Show</button>
             </div>
 
@@ -1015,7 +1015,7 @@ def generate_html_dashboard(pr_data):
 
                     <!-- Team Workload Table -->
                     <div style="background: #f8f9fa; padding: 25px; border-radius: 12px;">
-                        <h3 style="margin: 0 0 20px 0; color: #1f2937; font-size: 1.1em;">📋 Team Workload</h3>
+                        <h3 style="margin: 0 0 20px 0; color: #1f2937; font-size: 1.1em;">📋 Team Load</h3>
                         <div id="workloadTableContainer"></div>
                     </div>
                 </div>
