@@ -262,8 +262,24 @@ def collect_pr_data(repo_name, token):
     """Collect all PR data from GitHub"""
     auth = Auth.Token(token)
     g = Github(auth=auth)
+
+    # Check rate limit before starting
+    try:
+        rate_limit = g.get_rate_limit()
+        core_remaining = rate_limit.core.remaining
+        core_reset = rate_limit.core.reset
+        print(f"GitHub API Rate Limit: {core_remaining} requests remaining")
+        print(f"Rate limit resets at: {core_reset}")
+
+        if core_remaining < 100:
+            print(f"WARNING: Only {core_remaining} requests remaining!")
+            print(f"Consider waiting until {core_reset} for rate limit reset")
+            # Continue anyway but warn
+    except Exception as e:
+        print(f"Could not check rate limit: {e}")
+
     repo = g.get_repo(repo_name)
-    
+
     # Get all open PRs
     print("Fetching open PRs...")
     open_prs = list(repo.get_pulls(state='open', sort='created', direction='desc'))
@@ -330,8 +346,8 @@ def collect_pr_data(repo_name, token):
             if processed_count[0] % 10 == 0 or processed_count[0] == 1:
                 print(f"Processing PR {processed_count[0]}/{total_prs} (#{pr.number})...")
 
-        # Small delay to avoid hitting GitHub's secondary rate limits
-        time.sleep(0.3)
+        # Delay to avoid hitting GitHub's secondary rate limits (0.5s = ~2 req/sec)
+        time.sleep(0.5)
 
         return pr_info
 

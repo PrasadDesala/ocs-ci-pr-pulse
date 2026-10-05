@@ -1,11 +1,12 @@
 name: PR Dashboard Generator
 on:
   schedule:
-    - cron: '0 */2 * * *'
+    - cron: '0 */6 * * *'  # Every 6 hours to avoid rate limits
   workflow_dispatch:
-  push:
-    branches:
-      - main
+  # Temporarily disabled push trigger to avoid rate limits during development
+  # push:
+  #   branches:
+  #     - main
 
 permissions:
   contents: write
