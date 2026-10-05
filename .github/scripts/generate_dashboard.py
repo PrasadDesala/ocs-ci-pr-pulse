@@ -2117,12 +2117,35 @@ def generate_html_dashboard(pr_data):
                 }
             });
 
-            // Round-robin assign: lowest weighted load gets next PR
+            // Smart assignment: weighted load + expertise tiebreaker
             currentAssignments = {};
             needsReview.forEach((pr, idx) => {
                 const eligible = members.filter(m => m.toLowerCase() !== pr.author.toLowerCase());
                 if (eligible.length === 0) return;
-                eligible.sort((a, b) => loadMap[a] - loadMap[b]);
+
+                // Sort by load (primary), expertise (tiebreaker when loads are close)
+                eligible.sort((a, b) => {
+                    const loadA = loadMap[a] || 0;
+                    const loadB = loadMap[b] || 0;
+                    const loadDiff = loadA - loadB;
+
+                    // If loads are similar (within 2 points), prefer expertise
+                    if (Math.abs(loadDiff) <= 2) {
+                        const profileA = findProfile(a);
+                        const profileB = findProfile(b);
+                        const expertiseA = profileA?.squad_expertise?.[pr.squad] || 0;
+                        const expertiseB = profileB?.squad_expertise?.[pr.squad] || 0;
+
+                        // Tiebreaker: prefer higher expertise
+                        if (expertiseB !== expertiseA) {
+                            return expertiseB - expertiseA;
+                        }
+                    }
+
+                    // Primary factor: sort by load (ascending)
+                    return loadDiff;
+                });
+
                 const assignee = eligible[0];
                 currentAssignments[idx] = {pr, assignee, included: true};
                 loadMap[assignee] += getSizeWeight(pr); // Add weighted size
