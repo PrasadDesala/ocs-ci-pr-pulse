@@ -1889,6 +1889,7 @@ def generate_html_dashboard(pr_data):
                 // Assigned PRs (open_pr_numbers)
                 const assignedPRs = p.open_pr_numbers || [];
                 const assignedCount = assignedPRs.length;
+                const assignedRowId = `assigned-${p.login.replace(/[^a-zA-Z0-9]/g, '')}`;
                 let assignedHtml;
                 if (assignedCount <= 3) {
                     const links = assignedPRs.map(n => `<a href="https://github.com/red-hat-storage/ocs-ci/pull/${n}" target="_blank" style="color:#667eea;text-decoration:none;font-size:0.8em;">#${n}</a>`).join(' ');
@@ -1896,23 +1897,36 @@ def generate_html_dashboard(pr_data):
                 } else {
                     const firstTwo = assignedPRs.slice(0, 2);
                     const remaining = assignedCount - 2;
-                    const links = firstTwo.map(n => `<a href="https://github.com/red-hat-storage/ocs-ci/pull/${n}" target="_blank" style="color:#667eea;text-decoration:none;font-size:0.8em;">#${n}</a>`).join(' ');
-                    const moreText = `<span style="color:#6b7280;cursor:help;" title="${assignedPRs.slice(2).map(n => '#'+n).join(', ')}">+${remaining} more</span>`;
-                    assignedHtml = `<span style="font-weight:bold;">${assignedCount}</span> <span style="font-size:0.85em;">PRs</span><div style="margin-top:4px;">${links} ${moreText}</div>`;
+                    const visibleLinks = firstTwo.map(n => `<a href="https://github.com/red-hat-storage/ocs-ci/pull/${n}" target="_blank" style="color:#667eea;text-decoration:none;font-size:0.8em;">#${n}</a>`).join(' ');
+                    const hiddenLinks = assignedPRs.slice(2).map(n => `<a href="https://github.com/red-hat-storage/ocs-ci/pull/${n}" target="_blank" style="color:#667eea;text-decoration:none;font-size:0.8em;">#${n}</a>`).join(' ');
+                    const moreText = `<span id="${assignedRowId}-more" style="color:#667eea;cursor:pointer;text-decoration:underline;" onclick="document.getElementById('${assignedRowId}-hidden').style.display='inline';document.getElementById('${assignedRowId}-more').style.display='none';">+${remaining} more</span><span id="${assignedRowId}-hidden" style="display:none;"> ${hiddenLinks}</span>`;
+                    assignedHtml = `<span style="font-weight:bold;">${assignedCount}</span> <span style="font-size:0.85em;">PRs</span><div style="margin-top:4px;">${visibleLinks} ${moreText}</div>`;
                 }
 
-                // Pending PRs - find PRs where this person was assigned but hasn't reviewed yet
+                // Pending PRs - find PRs where this person is assigned but hasn't reviewed yet
                 const pendingPRs = allPRs.filter(pr => {
-                    const assigned = pr.open_pr_numbers?.includes(Number(pr.number)) || false;
-                    const reviewed = pr.actualReviewers?.includes(p.login) || false;
-                    return assigned && !reviewed;
+                    // Check if this PR is assigned to this person (PR number is in their open_pr_numbers)
+                    const isAssigned = (p.open_pr_numbers || []).includes(pr.number);
+                    // Check if this person has already reviewed it
+                    const hasReviewed = (pr.actualReviewers || []).includes(p.login);
+                    // Pending = assigned but not reviewed
+                    return isAssigned && !hasReviewed;
                 });
                 const pendingCount = pendingPRs.length;
+                const pendingRowId = `pending-${p.login.replace(/[^a-zA-Z0-9]/g, '')}`;
                 let pendingHtml;
                 if (pendingCount > 0) {
-                    const pendingLinks = pendingPRs.slice(0, 2).map(pr => `<a href="https://github.com/red-hat-storage/ocs-ci/pull/${pr.number}" target="_blank" style="color:#f59e0b;text-decoration:none;font-size:0.8em;">#${pr.number}</a>`).join(' ');
-                    const moreText = pendingCount > 2 ? ` <span style="color:#6b7280;">+${pendingCount-2} more</span>` : '';
-                    pendingHtml = `<span style="font-weight:bold;color:#f59e0b;">${pendingCount}</span> <span style="font-size:0.85em;">PRs</span><div style="margin-top:4px;">${pendingLinks}${moreText}</div>`;
+                    if (pendingCount <= 2) {
+                        const pendingLinks = pendingPRs.map(pr => `<a href="https://github.com/red-hat-storage/ocs-ci/pull/${pr.number}" target="_blank" style="color:#f59e0b;text-decoration:none;font-size:0.8em;">#${pr.number}</a>`).join(' ');
+                        pendingHtml = `<span style="font-weight:bold;color:#f59e0b;">${pendingCount}</span> <span style="font-size:0.85em;">PRs</span><div style="margin-top:4px;">${pendingLinks}</div>`;
+                    } else {
+                        const firstTwo = pendingPRs.slice(0, 2);
+                        const remaining = pendingCount - 2;
+                        const visibleLinks = firstTwo.map(pr => `<a href="https://github.com/red-hat-storage/ocs-ci/pull/${pr.number}" target="_blank" style="color:#f59e0b;text-decoration:none;font-size:0.8em;">#${pr.number}</a>`).join(' ');
+                        const hiddenLinks = pendingPRs.slice(2).map(pr => `<a href="https://github.com/red-hat-storage/ocs-ci/pull/${pr.number}" target="_blank" style="color:#f59e0b;text-decoration:none;font-size:0.8em;">#${pr.number}</a>`).join(' ');
+                        const moreText = `<span id="${pendingRowId}-more" style="color:#f59e0b;cursor:pointer;text-decoration:underline;" onclick="document.getElementById('${pendingRowId}-hidden').style.display='inline';document.getElementById('${pendingRowId}-more').style.display='none';">+${remaining} more</span><span id="${pendingRowId}-hidden" style="display:none;"> ${hiddenLinks}</span>`;
+                        pendingHtml = `<span style="font-weight:bold;color:#f59e0b;">${pendingCount}</span> <span style="font-size:0.85em;">PRs</span><div style="margin-top:4px;">${visibleLinks} ${moreText}</div>`;
+                    }
                 } else {
                     pendingHtml = `<span style="font-weight:bold;">0</span> <span style="font-size:0.85em;">PRs</span>`;
                 }

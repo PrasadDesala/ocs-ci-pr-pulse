@@ -6,7 +6,7 @@ An intelligent Pull Request management dashboard for the [ocs-ci](https://github
 
 ## 📊 View Dashboard
 
-**Live Dashboard:** [https://prasaddesala.github.io/ocs-ci-pr-pulse/docs/pr_dashboard.html](https://prasaddesala.github.io/ocs-ci-pr-pulse/docs/pr_dashboard.html)
+**Live Dashboard:** [https://prasaddesala.github.io/ocs-ci-pr-pulse/pr_dashboard.html](https://prasaddesala.github.io/ocs-ci-pr-pulse/pr_dashboard.html)
 
 Or view locally:
 
@@ -217,7 +217,7 @@ All UI fixes are in the **Jinja2 template** (lines 388-2323) inside `generate_da
 
 ## 🔗 Links
 
-- **Live Dashboard**: [View Dashboard](https://prasaddesala.github.io/ocs-ci-pr-pulse/docs/pr_dashboard.html)
+- **Live Dashboard**: [View Dashboard](https://prasaddesala.github.io/ocs-ci-pr-pulse/pr_dashboard.html)
 - **Source Repository**: [OCS-CI Project](https://github.com/red-hat-storage/ocs-ci)
 - **Report Issues**: [Issue Tracker](https://github.com/PrasadDesala/ocs-ci-pr-pulse/issues)
 
